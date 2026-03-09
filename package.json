@@ -1,0 +1,35 @@
+{
+  "name": "postking-cli",
+  "version": "0.1.0",
+  "description": "PostKing CLI for AI Agents — authenticate, manage brands, schedule posts, and more.",
+  "main": "dist/index.js",
+  "bin": {
+    "pking": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "postking",
+    "cli",
+    "ai",
+    "agents",
+    "marketing",
+    "social-media"
+  ],
+  "license": "MIT"
+}
