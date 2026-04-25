@@ -1,11 +1,18 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 
-interface VoiceProfile {
+interface PublicVoice {
   id: string;
   name?: string;
   authorName?: string;
-  modalAdapterId?: string;
+  isDeepVoice?: boolean;
+  optimizedMedium?: string[];
+  description?: string | null;
+}
+
+interface VoiceListOptions {
+  platform?: string;
+  filter?: string;
 }
 
 interface VoiceRewriteOptions {
@@ -14,28 +21,37 @@ interface VoiceRewriteOptions {
   platform?: string;
 }
 
-export async function voiceListCommand(): Promise<void> {
+export async function voiceListCommand(options: VoiceListOptions = {}): Promise<void> {
   const client = createClient();
 
-  try {
-    // Fetch public profiles (no auth required) and brand-specific profiles
-    const res = await client.get("/api/voice-profiles/public");
-    const profiles: VoiceProfile[] = res.data.profiles || [];
+  const params: Record<string, string> = {};
+  if (options.platform) params.medium = options.platform.toLowerCase();
+  if (options.filter) params.filter = options.filter.toLowerCase();
 
-    if (profiles.length === 0) {
-      console.log("No public voice profiles available.");
+  try {
+    const res = await client.get("/api/agent/v1/voices/public", { params });
+    const voices: PublicVoice[] = res.data.voices || [];
+
+    if (voices.length === 0) {
+      const scope = options.platform ? ` for platform '${options.platform}'` : "";
+      console.log(`No public voice profiles available${scope}.`);
       return;
     }
 
-    console.log(`Available voice profiles (${profiles.length}):\n`);
-    profiles.forEach((p) => {
-      const label = p.name || p.authorName || "Unnamed";
-      const deepLabel = p.modalAdapterId ? " [DEEP VOICE]" : "";
-      console.log(`  ID:     ${p.id}`);
-      console.log(`  Name:   ${label}${deepLabel}`);
+    const scope = options.platform ? ` for ${options.platform}` : "";
+    console.log(`Available public voice profiles${scope} (${voices.length}):\n`);
+
+    voices.forEach((v) => {
+      const name = v.name || v.authorName || "Anonymous";
+      const platforms = (v.optimizedMedium || []).join(", ");
+
+      console.log(`  ID:          ${v.id}`);
+      console.log(`  Name:        ${name}`);
+      if (platforms) console.log(`  Platforms:   ${platforms}`);
+      if (v.description) console.log(`  Description: ${v.description}`);
       console.log("");
     });
-  } catch (err: unknown) {
+  } catch {
     process.exit(1);
   }
 }
@@ -80,11 +96,10 @@ export async function voiceRewriteCommand(options: VoiceRewriteOptions): Promise
         console.log("");
       });
     } else {
-      // Fallback: print raw response
       console.log("RESULT:");
       console.log(JSON.stringify(data, null, 2));
     }
-  } catch (err: unknown) {
+  } catch {
     process.exit(1);
   }
 }

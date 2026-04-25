@@ -44,6 +44,7 @@ import { socialConnectPlatformCommand } from "./commands/social-extra";
 import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } from "./commands/social";
 import { userCreditsCommand } from "./commands/user";
 import { voiceListCommand, voiceRewriteCommand } from "./commands/voice";
+import { trendsListCommand } from "./commands/trends";
 import {
   visualsCardsEditCommand,
   visualsCardsListCommand,
@@ -366,8 +367,15 @@ const voice = program
 
 voice
   .command("list")
-  .description("List all available public voice profiles with their IDs.")
-  .action(voiceListCommand);
+  .description("List all available public voice profiles with their IDs, descriptions, and supported platforms.")
+  .option("--platform <platform>", "Filter by supported platform (x, linkedin, threads, blog, lp)")
+  .option("--filter <filter>", "Filter by voice type: 'shallow' or 'deep'")
+  .action((options) =>
+    voiceListCommand({
+      platform: options.platform,
+      filter: options.filter,
+    })
+  );
 
 voice
   .command("rewrite")
@@ -385,6 +393,26 @@ voice
       platform: options.platform,
     })
   );
+
+// ─── trends ──────────────────────────────────────────────────────────────────
+const trends = program
+  .command("trends")
+  .description("Browse cross-niche trending posts crawled by PostKing (refreshed every 3 days).");
+
+trends
+  .command("list")
+  .description(
+    "List the top trending posts for a niche on a platform.\n" +
+    "Niches: ai-saas | marketing | web3. Platforms: x (more coming).\n" +
+    "Wraps GET /api/agent/v1/trends"
+  )
+  .option("--niche <niche>", "ai-saas | marketing | web3 (default: ai-saas)")
+  .option("--platform <platform>", "Platform to pull trends from (default: x)")
+  .option("--days <n>", "Crawl window in days, max 30 (default: 3)")
+  .option("--limit <n>", "Max posts to return, max 50 (default: 20)")
+  .option("--sort <sort>", "engagement | recent (default: engagement)")
+  .option("--json", "Emit raw JSON payload (includes hook/template/pattern deconstruction)")
+  .action((opts) => trendsListCommand(opts));
 
 // ─── domains ─────────────────────────────────────────────────────────────────
 const domains = program
@@ -1087,15 +1115,17 @@ visuals
   .command("pick <postId>")
   .description(
     "Select a visual for a post on a given platform.\n" +
-    "Pass --style + optional --variant for a card/quote template,\n" +
-    "--asset for a library asset, or --slot for a raw slot key (power users only).\n" +
+    "Recommended: pass --pick <N> after running 'pking visuals options' to choose by index.\n" +
+    "Power users: pass --style + optional --variant for a card/quote template,\n" +
+    "--asset for a library asset, or --slot for a raw slot key.\n" +
     "Wraps PATCH /api/agent/v1/posts/{postId}/visuals"
   )
   .requiredOption("--platform <platform>", "Target platform (x | linkedin | instagram | …)")
-  .option("--style <style>", "Template style name (e.g. glass-morphism, default, neon-glow)")
-  .option("--variant <n>", "1-based variant number within the style")
-  .option("--asset <assetId>", "Library asset ID to attach directly")
-  .option("--slot <slotKey>", "Raw slot key (e.g. slot16) — power-user override; use --style/--variant normally")
+  .option("--pick <n>", "1-based index from the most recent 'pking visuals options' run (uses ~/.postking/cache)")
+  .option("--style <style>", "Template style name — power user (e.g. glass-morphism, default, neon-glow)")
+  .option("--variant <n>", "1-based variant number within the style — power user")
+  .option("--asset <assetId>", "Library asset ID to attach directly — power user")
+  .option("--slot <slotKey>", "Raw slot key (e.g. slot16) — power-user override")
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => visualsPickCommand(id, opts));
 
