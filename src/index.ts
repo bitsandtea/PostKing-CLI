@@ -11,6 +11,7 @@ import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
 import { loginCommand } from "./commands/login";
+import { loginStartCommand, loginFinishCommand } from "./commands/auth-device";
 import { logoutCommand } from "./commands/logout";
 import {
   lpDeleteCommand,
@@ -136,6 +137,25 @@ program
     "the server every 5 seconds until authorization is granted."
   )
   .action(loginCommand);
+
+// ─── login-start / login-finish (agent-friendly, non-blocking) ──────────────
+program
+  .command("login-start")
+  .description(
+    "Start a device-flow login without polling. Prints the URL + user code,\n" +
+    "saves the device_code locally, and exits immediately. Use this from\n" +
+    "agent skills where a long-running poll would time out."
+  )
+  .action(loginStartCommand);
+
+program
+  .command("login-finish")
+  .description(
+    "Finish a previously-started device-flow login. Calls the token endpoint\n" +
+    "ONCE; exits with status 2 if the user has not authorized yet (caller can\n" +
+    "retry after the user confirms). Use after 'pking login-start'."
+  )
+  .action(loginFinishCommand);
 
 // ─── logout ──────────────────────────────────────────────────────────────────
 program
