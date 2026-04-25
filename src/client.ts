@@ -31,8 +31,19 @@ export function createClient(): AxiosInstance {
     (error) => {
       if (error.response) {
         const { status, data } = error.response;
-
-        if (status === 402) {
+        // v0.1 uniform agent error envelope
+        const envelope = data?.error;
+        if (envelope && typeof envelope === "object") {
+          const code = envelope.code ?? "ERROR";
+          const message = envelope.message ?? "(no message)";
+          console.error(`ERROR ${status} ${code}: ${message}`);
+          if (envelope.checkoutUrl) {
+            console.error(`-> Upgrade: ${envelope.checkoutUrl}`);
+          }
+          if (envelope.docsUrl) {
+            console.error(`-> Docs: ${envelope.docsUrl}`);
+          }
+        } else if (status === 402) {
           console.error("ERROR 402: Insufficient credits or trial expired.");
           const url = data?.checkout_url || data?.billing_url;
           if (url) {

@@ -1,10 +1,21 @@
 {
   "name": "postking-cli",
   "version": "0.1.0",
-  "description": "PostKing CLI for AI Agents — authenticate, manage brands, schedule posts, and more.",
+  "description": "PostKing CLI for autonomous agents — authenticate, manage brands, schedule posts, and more.",
   "main": "dist/index.js",
   "bin": {
-    "pking": "./dist/index.js"
+    "pking": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitsandtea/PostKing-CLI.git"
+  },
+  "homepage": "https://github.com/bitsandtea/PostKing-CLI#readme",
+  "bugs": {
+    "url": "https://github.com/bitsandtea/PostKing-CLI/issues"
   },
   "scripts": {
     "build": "tsc",
@@ -26,8 +37,8 @@
   "keywords": [
     "postking",
     "cli",
-    "ai",
     "agents",
+    "automation",
     "marketing",
     "social-media"
   ],

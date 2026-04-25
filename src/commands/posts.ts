@@ -6,7 +6,6 @@ const VALID_PLATFORMS = ["x", "linkedin", "facebook", "instagram", "threads"];
 interface PostsCreateOptions {
   platform: string;
   content: string;
-  image?: string;
   schedule?: string;
 }
 
@@ -63,17 +62,6 @@ export async function postsCreateCommand(options: PostsCreateOptions): Promise<v
     payload.scheduledAt = scheduled.toISOString();
   }
 
-  if (options.image) {
-    // Handle image upload logic here if needed
-    // For now we might just accept a URL or pass a placeholder
-    console.log(`Note: Image attachment (${options.image}) will be processed as a smart asset.`);
-    payload.platformAssets = {
-       [platform]: {
-         manualImageDescription: "Attached from CLI"
-       }
-    };
-  }
-
   try {
     const res = await client.post(`/api/brands/${brandId}/posts/manual`, payload);
     const posts: PostResult[] = res.data.posts || [];
@@ -88,8 +76,9 @@ export async function postsCreateCommand(options: PostsCreateOptions): Promise<v
       }
       console.log("");
     });
-    
+
     console.log("Tip: Use 'pking posts approve <id>' to confirm and schedule this post.");
+    process.stderr.write("Tip: attach visuals with 'pking visuals pick <postId> --platform <p>' after creation.\n");
   } catch (err: unknown) {
     process.exit(1);
   }
@@ -122,10 +111,10 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     posts.forEach((post) => {
       const statusStr = post.confirmed ? "APPROVED" : "DRAFT";
       const schedStr = post.postAt ? ` @ ${new Date(post.postAt).toLocaleString()}` : "";
-      console.log(`  [${statusStr}] ${post.id.slice(-8)} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}`);
+      console.log(`  [${statusStr}] ${post.id} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}`);
     });
-    
-    console.log("\nUse 'pking posts generate' to create new AI content.");
+
+    console.log("\nUse 'pking posts generate' to draft a new post.");
   } catch (err) {
     process.exit(1);
   }
@@ -202,7 +191,7 @@ export async function postsGenerateCommand(options: {
   }
 
   const count = options.variations || 1;
-  console.log(`\n✨ Generating ${count} variation(s) for ${options.platform}...`);
+  console.log(`\n🛠  Generating ${count} variation(s) for ${options.platform}...`);
   if (options.theme) {
     console.log(`   Theme: "${options.theme}"`);
   } else {
@@ -393,6 +382,23 @@ export async function postsViewCommand(postId: string): Promise<void> {
 }
 
 
+export async function postsScheduleCommand(postId: string, options: { date: string; variation?: string; timezone?: string }): Promise<void> {
+  if (!options.date) {
+    console.error("ERROR: --date is required to schedule a post.");
+    process.exit(1);
+  }
+  const scheduled = new Date(options.date);
+  if (isNaN(scheduled.getTime())) {
+    console.error("ERROR: Invalid date format. Use ISO 8601, e.g. 2026-05-05T14:00:00+02:00");
+    process.exit(1);
+  }
+  return postsApproveCommand(postId, {
+    variation: options.variation,
+    schedule: scheduled.toISOString(),
+    timezone: options.timezone,
+  });
+}
+
 export async function postsCancelCommand(postId: string): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
@@ -490,7 +496,7 @@ export async function postsGenerateBatchCommand(options: {
   const days = parseInt(options.days, 10) || 7;
   const postTimes = options.times.split(",").map((t: string) => t.trim());
 
-  console.log(`\n✨ Starting Bulk Generation for ${options.platform}...`);
+  console.log(`\n🛠  Starting bulk generation for ${options.platform}...`);
   console.log(`   Frequency: ${options.frequency}`);
   console.log(`   Posts Per Day: ${postsPerDay}`);
   console.log(`   Times: ${postTimes.join(", ")}`);

@@ -1,6 +1,6 @@
 # PostKing CLI (`pking`)
 
-The PostKing CLI lets you interact with the PostKing platform directly from your terminal or AI agent. It covers authentication, brand management, content generation, scheduling, repurposing, and more.
+The PostKing CLI lets you interact with the PostKing platform directly from your terminal or autonomous agent. It covers authentication, brand management, content generation, scheduling, repurposing, and more.
 
 ## Installation
 
@@ -124,7 +124,7 @@ pking brand themes delete clx9theme1
 ```
 
 ### `pking brand generate-themes`
-Generate new content themes using AI (deducts credits). Optionally provide instructions or source content.
+Generate new content themes with the core engine (deducts credits). Optionally provide instructions or source content.
 
 ```bash
 # Generate 5 themes (default)
@@ -145,7 +145,7 @@ pking brand generate-themes --count 3 --input "We help remote teams stay aligned
 ## Posts (`pking posts`)
 
 ### `pking posts generate`
-Use AI to generate a post for a platform (deducts credits). Polls until complete and prints all variations.
+Generate a post for a platform with the core engine (deducts credits). Polls until complete and prints all variations.
 
 ```bash
 # Generate 1 post for X (random theme)
@@ -225,7 +225,7 @@ pking posts view clxpost1234
 ```
 
 ### `pking posts approve <postId>`
-Confirm a draft and move it to the scheduling queue.
+Confirm a draft. Without `--schedule` the post joins the automated queue; with `--schedule` it is pinned to that time.
 
 ```bash
 # Approve and add to automated queue
@@ -241,11 +241,26 @@ pking posts approve clxpost1234 --schedule "2026-04-15T12:00:00Z"
 pking posts approve clxpost1234 --schedule "2026-04-15T09:00:00Z" --timezone "America/New_York"
 ```
 
+### `pking posts schedule <postId>`
+Confirm a draft and pin it to a specific date/time. Equivalent to `approve --schedule`, but makes the intent explicit.
+
+```bash
+pking posts schedule clxpost1234 --date "2026-05-05T14:00:00+02:00"
+pking posts schedule clxpost1234 --date "2026-05-05T09:00:00Z" --variation 2 --timezone "America/New_York"
+```
+
 ### `pking posts reschedule <postId>`
-Move a scheduled post to a new time.
+Move an already-scheduled (or failed) post to a new time. Does not work on drafts — use `schedule` / `approve` first.
 
 ```bash
 pking posts reschedule clxpost1234 --date "2026-05-01T14:00:00Z"
+```
+
+### Lifecycle
+
+```
+draft ──approve──▶ queued       (no --schedule)
+draft ──schedule/approve --schedule──▶ scheduled ──reschedule──▶ new time
 ```
 
 ### `pking posts cancel <postId>`
@@ -323,7 +338,7 @@ Rewrite text using a specific voice profile.
 
 ```bash
 # Rewrite for X
-pking voice rewrite --profile_id clxvoice1 --text "AI is changing marketing." --platform x
+pking voice rewrite --profile_id clxvoice1 --text "Automation is changing marketing." --platform x
 
 # Rewrite for LinkedIn
 pking voice rewrite --profile_id clxvoice1 --text "We just raised our Series A." --platform linkedin
@@ -348,18 +363,18 @@ pking editor rewrite --text "Today we shipped an update." --platform x
 ```
 
 ### `pking editor humanize`
-Apply LLM rewrite and BERT replacements to reduce AI detection signals.
+Rewrite text to read as natural, human-written prose and reduce machine-generated signals.
 
 ```bash
-pking editor humanize --text "Artificial intelligence is revolutionizing the marketing industry."
-pking editor humanize --text "Our product leverages cutting-edge machine learning." --platform linkedin
+pking editor humanize --text "Adaptive systems are revolutionizing the marketing industry."
+pking editor humanize --text "Our product leverages cutting-edge adaptive logic." --platform linkedin
 ```
 
-### `pking editor ai-check`
-Check if content is likely AI-generated.
+### `pking editor detect`
+Analyze text and report the likelihood that it was machine-generated.
 
 ```bash
-pking editor ai-check --text "Artificial intelligence is revolutionizing how brands communicate."
+pking editor detect --text "Adaptive systems are revolutionizing how brands communicate."
 ```
 
 ---
@@ -421,7 +436,289 @@ pking user credits
 
 ---
 
-## Typical AI Agent Workflow
+## Visuals (`pking visuals`)
+
+Manage the brand asset library and attach visuals to posts. All commands are pass-throughs to
+`/api/agent/v1/brands/{brandId}/assets/*` (library) or `/api/agent/v1/posts/{postId}/visuals*`
+(post-scoped picker).
+
+### Typical flow
+
+```bash
+# 1. Generate a post
+pking posts generate --platform linkedin --theme "Dark mode shipped"
+# Note the postId from the output
+
+POST_ID=<postId>
+
+# 2. Browse available visuals (human-friendly table + best pick banner)
+pking visuals options $POST_ID --platform linkedin
+
+# 3. Select a card template
+pking visuals pick $POST_ID --platform linkedin --style glass-morphism --variant 2
+
+# 4. Optionally review and edit cards
+pking visuals cards list $POST_ID
+pking visuals cards edit $POST_ID --card 1 --body "43% of devs flipped it on day one." --rerender
+
+# 5. Generate a carousel PDF
+pking visuals carousel $POST_ID --style glass-morphism --variant 2
+
+# 6. Schedule the post
+pking posts schedule $POST_ID --date "2026-06-01T09:00:00Z"
+```
+
+---
+
+### `pking visuals list`
+List assets in the brand library.
+Wraps `GET /api/agent/v1/brands/{brandId}/assets`
+
+```bash
+# All assets
+pking visuals list
+
+# Filter by type and tag
+pking visuals list --type image --tags hero,q2 --limit 20
+
+# Full-text search
+pking visuals list --search "launch banner"
+
+# JSON output for scripting
+pking visuals list --json | jq '.[].id'
+```
+
+---
+
+### `pking visuals view <assetId>`
+Show full metadata for a single asset.
+Wraps `GET /api/agent/v1/brands/{brandId}/assets/{assetId}`
+
+```bash
+pking visuals view clxasset1234
+pking visuals view clxasset1234 --json
+```
+
+---
+
+### `pking visuals upload`
+Upload a local file to the brand library (requires Node 18+).
+Wraps `POST /api/agent/v1/brands/{brandId}/assets` (multipart)
+
+```bash
+pking visuals upload --file ./banner.png --name "Q2 hero banner" --tags hero,q2
+pking visuals upload --file ./product-demo.mp4 --name "Demo video"
+pking visuals upload --file ./deck.pdf --name "Investor deck" --description "Series A deck — March 2026"
+```
+
+---
+
+### `pking visuals import-url <url>`
+Import a remote URL as an asset.
+Wraps `POST /api/agent/v1/brands/{brandId}/assets` (JSON body with `url`)
+
+```bash
+pking visuals import-url https://example.com/hero.jpg --name "Site hero" --tags hero
+pking visuals import-url https://cdn.example.com/video.mp4 --name "Product video"
+```
+
+---
+
+### `pking visuals import-csv <file>`
+Batch-import up to 50 URLs from a file (one URL per line or a JSON array).
+Wraps `POST /api/agent/v1/brands/{brandId}/assets/import-urls`
+
+```bash
+# One URL per line
+echo "https://example.com/img1.jpg
+https://example.com/img2.jpg" > urls.txt
+pking visuals import-csv urls.txt
+
+# JSON array
+echo '["https://example.com/img1.jpg","https://example.com/img2.jpg"]' > urls.json
+pking visuals import-csv urls.json
+```
+
+---
+
+### `pking visuals tag <assetId>`
+Add or remove tags on an asset.
+Wraps `PATCH /api/agent/v1/brands/{brandId}/assets/{assetId}`
+
+```bash
+pking visuals tag clxasset1234 --add launch,featured
+pking visuals tag clxasset1234 --remove old,draft
+pking visuals tag clxasset1234 --add launch --remove old
+```
+
+---
+
+### `pking visuals delete <assetId>`
+Soft-delete (deactivate) an asset from the library.
+Wraps `DELETE /api/agent/v1/brands/{brandId}/assets/{assetId}`
+
+```bash
+pking visuals delete clxasset1234
+```
+
+---
+
+### `pking visuals tags`
+List all tags used across the brand library.
+Wraps `GET /api/agent/v1/brands/{brandId}/assets/tags`
+
+```bash
+pking visuals tags
+pking visuals tags --json
+```
+
+---
+
+### `pking visuals suggest`
+Get asset suggestions from the library that match a context string.
+Wraps `GET /api/agent/v1/brands/{brandId}/assets/suggestions`
+
+```bash
+pking visuals suggest --context "dark mode launch" --limit 5
+pking visuals suggest --context "product demo screenshot"
+```
+
+---
+
+### `pking visuals search-stock <query>`
+Search Unsplash + Pexels for matching stock photos or videos.
+Wraps `POST /api/agent/v1/brands/{brandId}/assets/search-stock`
+
+```bash
+pking visuals search-stock "dark empty office late night"
+pking visuals search-stock "team celebration" --platform linkedin
+pking visuals search-stock "code on a screen" --json | jq '.results[0].url'
+```
+
+---
+
+### `pking visuals options <postId>`
+Browse all visual options for a post, including a "Best pick" banner.
+In `--json` mode emits the raw B.8 payload with `_internal.slot` preserved.
+Wraps `GET /api/agent/v1/posts/{postId}/visuals`
+
+```bash
+# Human table + best pick banner
+pking visuals options clxpost1234
+
+# Filter to LinkedIn card templates only
+pking visuals options clxpost1234 --platform linkedin --category card
+
+# JSON for agent pipelines
+pking visuals options clxpost1234 --json
+pking visuals options clxpost1234 --platform linkedin --json | jq '.options.linkedin.cardTemplates | length'
+```
+
+---
+
+### `pking visuals regenerate <postId>`
+Re-run the visual options engine for a post.
+Wraps `POST /api/agent/v1/posts/{postId}/visuals/regenerate`
+
+```bash
+pking visuals regenerate clxpost1234
+pking visuals regenerate clxpost1234 --load-external   # also refreshes Unsplash/Pexels
+pking visuals regenerate clxpost1234 --platform linkedin
+```
+
+---
+
+### `pking visuals pick <postId>`
+Select a visual for a post on a given platform.
+Wraps `PATCH /api/agent/v1/posts/{postId}/visuals`
+
+```bash
+# Select a card template by style + variant
+pking visuals pick clxpost1234 --platform linkedin --style glass-morphism --variant 2
+pking visuals pick clxpost1234 --platform x --style default --variant 1
+
+# Attach a library asset directly
+pking visuals pick clxpost1234 --platform linkedin --asset clxasset5678
+
+# Power-user: raw slot key (visible in --json output's _internal.slot field)
+pking visuals pick clxpost1234 --platform x --slot slot16
+```
+
+On `400` errors, the server returns a list of valid styles which the CLI prints automatically:
+```
+ERROR: Invalid style/variant combination.
+Valid styles for this post:
+  - default
+  - glass-morphism
+  - neon-glow
+```
+
+---
+
+### `pking visuals clear <postId>`
+Clear the visual selection for a post on a given platform.
+Wraps `PATCH /api/agent/v1/posts/{postId}/visuals` with `{ clear: true }`
+
+```bash
+pking visuals clear clxpost1234 --platform linkedin
+```
+
+---
+
+### `pking visuals cards list <postId>`
+Show the card data (number, title, body) attached to a post.
+Wraps `GET /api/agent/v1/posts/{postId}/cards`
+
+```bash
+pking visuals cards list clxpost1234
+pking visuals cards list clxpost1234 --json
+```
+
+---
+
+### `pking visuals cards edit <postId>`
+Edit a single card by 1-based index.
+Wraps `PATCH /api/agent/v1/posts/{postId}/cards`
+
+```bash
+# Edit card 1's body
+pking visuals cards edit clxpost1234 --card 1 --body "43% of devs flipped it on day one."
+
+# Edit title + body and re-render visuals immediately
+pking visuals cards edit clxpost1234 --card 2 --title "Shipped" --body "Dark mode is live." --rerender
+
+# Update the stat number on card 3
+pking visuals cards edit clxpost1234 --card 3 --number "2.4x"
+```
+
+---
+
+### `pking visuals cards set <postId>`
+Bulk-replace all cards from a JSON file.
+Wraps `PATCH /api/agent/v1/posts/{postId}/cards`
+
+```bash
+# cards.json must be a JSON array: [{ "number": "1", "title": "...", "body": "..." }, ...]
+pking visuals cards set clxpost1234 --file cards.json
+pking visuals cards set clxpost1234 --file cards.json --rerender
+```
+
+---
+
+### `pking visuals carousel <postId>`
+Generate a multi-slide carousel PDF from the post's card data. Returns a downloadable PDF asset.
+Wraps `POST /api/agent/v1/posts/{postId}/carousel`
+
+```bash
+pking visuals carousel clxpost1234
+pking visuals carousel clxpost1234 --style glass-morphism --variant 2
+pking visuals carousel clxpost1234 --title "Dark mode shipped" --style corporate-pro
+pking visuals carousel clxpost1234 --json | jq '.asset.url'
+```
+
+---
+
+## Typical Agent Workflow
 
 ```bash
 # 1. Authenticate (human does this once)
@@ -433,8 +730,10 @@ pking onboard https://example.com --name "Acme"
 # 3. Check connected socials
 pking social check
 
-# 4. Generate 3 LinkedIn posts and pick the best
+# 4. Generate a LinkedIn post, add a visual, and schedule
 pking posts generate --platform linkedin --variations 3 --theme "Product Launch"
+pking visuals options <postId> --platform linkedin         # review options + best pick
+pking visuals pick <postId> --platform linkedin --style glass-morphism --variant 1
 pking posts approve <postId> --variation 2 --schedule "2026-04-10T09:00:00Z"
 
 # 5. Repurpose a blog post to X and LinkedIn

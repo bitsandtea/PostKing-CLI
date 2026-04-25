@@ -270,7 +270,7 @@ export async function brandThemesGenerateCommand(options: { count?: string; inst
     console.warn(`⚠️ Maximum 10 themes can be generated at once. Adjusted count from ${count} to 10.`);
     count = 10;
   }
-  console.log(`\n✨ Requesting generation of ${count} new themes...`);
+  console.log(`\n🛠  Requesting generation of ${count} new themes...`);
 
   try {
     // 1. Snapshot existing themes

@@ -51,7 +51,7 @@ export async function editorHumanizeCommand(options: { text: string; platform?: 
     process.exit(1);
   }
 
-  console.log("\n🧠 Getting rid of AI Slop...");
+  console.log("\n🧠 Smoothing out robotic phrasing...");
 
   try {
     const platform = options.platform?.toLowerCase();
@@ -66,7 +66,7 @@ export async function editorHumanizeCommand(options: { text: string; platform?: 
       }
     });
 
-    console.log("\n✨ HUMANIZED CONTENT:");
+    console.log("\n🪶 HUMANIZED CONTENT:");
     console.log("------------------------------------------");
     console.log(res.data.processedText);
     console.log("------------------------------------------");
@@ -94,7 +94,7 @@ export async function editorAICheckCommand(options: { text: string }): Promise<v
     process.exit(1);
   }
 
-  console.log("\n🔍 Analyzing content for AI signatures...");
+  console.log("\n🔍 Analyzing content for machine-generated signatures...");
 
   try {
     const res = await client.post(`/api/brands/${brandId}/editor/ai-check`, {
@@ -109,16 +109,16 @@ export async function editorAICheckCommand(options: { text: string }): Promise<v
 
     console.log("\n📊 DETECTION RESULT:");
     console.log("------------------------------------------");
-    
+
     if (isFake) {
-      console.log(`Verdict: \x1b[31mAI GENERATED\x1b[0m (${aiProb}% probability)`);
+      console.log(`Verdict: \x1b[31mLIKELY MACHINE-GENERATED\x1b[0m (${aiProb}% probability)`);
     } else {
       console.log(`Verdict: \x1b[32mLIKELY HUMAN\x1b[0m (${humanProb}% human probability)`);
     }
 
     console.log(`\nProbabilities:`);
-    console.log(`  - AI Likelihood:    ${aiProb}%`);
-    console.log(`  - Human Likelihood: ${humanProb}%`);
+    console.log(`  - Machine-generated: ${aiProb}%`);
+    console.log(`  - Human-written:     ${humanProb}%`);
     
     if (burstiness) {
       console.log(`\nWriting Analysis:`);
@@ -128,7 +128,7 @@ export async function editorAICheckCommand(options: { text: string }): Promise<v
     
     console.log("------------------------------------------\n");
   } catch (err: any) {
-    console.error("❌ ERROR: AI Check failed.");
+    console.error("❌ ERROR: Detection check failed.");
     console.error(err.response?.data?.error || err.message || err);
     process.exit(1);
   }

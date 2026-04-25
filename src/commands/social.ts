@@ -84,7 +84,7 @@ export async function socialConnectCommand(): Promise<void> {
     console.log("To connect your social media accounts, please visit the following link in your browser:");
     console.log(`\n\x1b[36m${url}\x1b[0m\n`);
     console.log("This link will log you in automatically and take you directly to the connection page.");
-    console.log("Note: This link is single-use and valid for 1 hour.\n");
+    console.log("Note: This link is single-use and valid for 15 minutes.\n");
   } catch (err: any) {
     console.error("\n❌ ERROR: Could not generate connection link.");
     if (err.response?.data?.error) {
