@@ -12,6 +12,7 @@ import os from "os";
 import path from "path";
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 // ─── helpers (duplicated deliberately — no shared module to avoid coupling) ──
 
@@ -70,6 +71,23 @@ type PickArgs = {
   slot?: string;
 };
 
+type TemplateParams = {
+  quote?: string;
+  title?: string;
+  body?: string;
+  author?: string;
+  avatar?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  onPrimary?: string;
+  onSecondary?: string;
+  color?: string;
+  primaryFont?: string;
+  secondaryFont?: string;
+  type?: string;
+};
+
 type AssetOption = {
   kind?: string;
   style?: string;
@@ -83,6 +101,7 @@ type AssetOption = {
   pickArgs?: PickArgs;
   displayLabel?: string;
   cardText?: { title?: string; body?: string };
+  templateParams?: TemplateParams;
   _internal?: { slot?: string };
 };
 
@@ -105,6 +124,18 @@ type OptionsResponse = {
     stockVideos?: AssetOption[];
   }>;
   selected?: Record<string, unknown>;
+  branding?: {
+    author?: string;
+    avatar?: string | null;
+    primary?: string;
+    secondary?: string;
+    accent?: string;
+    onPrimary?: string;
+    onSecondary?: string;
+    primaryFont?: string;
+    secondaryFont?: string;
+  };
+  settingsUrl?: string;
 };
 
 type CachedItem = {
@@ -204,6 +235,7 @@ function renderPlatform(
   plat: string,
   platOptions: NonNullable<OptionsResponse["options"]>[string],
   bestPick: OptionsResponse["bestPick"] | undefined,
+  branding: OptionsResponse["branding"] | undefined,
 ): CachedItem[] {
   // Build a flat ordered list across sections.
   type Entry = {
@@ -219,6 +251,29 @@ function renderPlatform(
   }
 
   console.log(`\n╭─ ${plat.toUpperCase()} ────────────────────────────────`);
+
+  // Print the resolved brand context once. Every quote/card template render
+  // would use these values for colors/avatar/author/font (unless the user
+  // changes brand settings — see the settings URL in the footer).
+  if (branding) {
+    const colorBits = [
+      branding.primary ? `primary ${branding.primary}` : "",
+      branding.secondary ? `secondary ${branding.secondary}` : "",
+      branding.onPrimary ? `onPrimary ${branding.onPrimary}` : "",
+      branding.onSecondary ? `onSecondary ${branding.onSecondary}` : "",
+    ].filter(Boolean);
+    if (colorBits.length > 0) console.log(`Brand colors: ${colorBits.join(" · ")}`);
+    if (branding.author || branding.avatar) {
+      const author = branding.author ? `author "${truncate(branding.author, 40)}"` : "";
+      const avatar = branding.avatar ? `avatar ${truncate(branding.avatar, 70)}` : "";
+      const sep = author && avatar ? " · " : "";
+      console.log(`Brand identity: ${author}${sep}${avatar}`);
+    }
+    if (branding.primaryFont || branding.secondaryFont) {
+      const fonts = [branding.primaryFont, branding.secondaryFont].filter(Boolean).join(" / ");
+      console.log(`Brand fonts: ${fonts}`);
+    }
+  }
 
   if (flat.length === 0) {
     console.log(`No visual options yet. Run 'pking visuals regenerate ${postId}' to retry.`);
@@ -295,6 +350,13 @@ function renderPlatform(
         }
       }
 
+      // Per-row params that DIFFER between templates of the same kind.
+      // Brand colors / avatar / author / fonts are identical across all
+      // templates and printed once as a section header — no need to repeat.
+      if (item.templateParams && item.kind === "quote" && item.templateParams.quote) {
+        console.log(`      quote:  "${truncate(item.templateParams.quote, 120)}"`);
+      }
+
       cached.push({
         index: globalIdx,
         pickArgs: synthesizePickArgs(item),
@@ -351,10 +413,18 @@ export async function visualsOptionsCommand(postId: string, options: VisualsOpti
         ? data.bestPick
         : undefined;
 
-      const cached = renderPlatform(postId, plat, platOptions, bp);
+      const cached = renderPlatform(postId, plat, platOptions, bp, data.branding);
       writeCacheFile(postId, plat, cached);
 
       console.log(`\nPick one with:  pking visuals pick ${postId} --platform ${plat} --pick <N>`);
+    }
+
+    // Footer: tell the agent how to load more stock options and how the
+    // user can change brand colors / avatar (we don't expose overrides in
+    // the CLI — those live in the dashboard).
+    console.log(`\nLoad more stock photos/videos: pking visuals regenerate ${postId} --load-external`);
+    if (data.settingsUrl) {
+      console.log(`To change brand colors or default avatar: ${data.settingsUrl}`);
     }
   } catch (err) {
     printError(err);
@@ -480,11 +550,19 @@ export async function visualsPickCommand(postId: string, options: VisualsPickOpt
     if (options.json) { emitJson(res.data); return; }
 
     console.log(`SUCCESS: Visual selection applied to post ${postId} for platform ${options.platform}.`);
-    const selected = res.data?.selected?.[options.platform];
-    if (selected?.style) console.log(`  style:   ${selected.style}`);
-    if (selected?.variant != null) console.log(`  variant: ${selected.variant}`);
-    if (selected?.url) console.log(`  preview: ${selected.url}`);
+    // applyVisualsPick returns { postId, platform, selected: <slotKey>, kind, style, variant, webUrl }
+    const data = res.data as {
+      kind?: string;
+      style?: string;
+      variant?: number;
+      selected?: string | null;
+    };
+    if (data.kind) console.log(`  kind:    ${data.kind}`);
+    if (data.style) console.log(`  style:   ${data.style}`);
+    if (data.variant != null) console.log(`  variant: ${data.variant}`);
+    if (data.selected) console.log(`  slot:    ${data.selected}`);
     console.log(`\nTip: run 'pking posts approve ${postId}' to schedule this post with the selected visual.`);
+    printWebUrl(res.data);
   } catch (err) {
     // Surface valid styles from 400 error details
     const e = err as { response?: { status?: number; data?: { error?: ErrorEnvelope } } };

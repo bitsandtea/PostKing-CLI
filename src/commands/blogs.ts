@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -82,6 +83,7 @@ export async function blogsGenerateCommand(options: {
     if (title) console.log(`Title: ${title}`);
     const statusUrl = id ? `/api/agent/v1/brands/${brandId}/blogs/${id}/status` : null;
     if (statusUrl) console.log(`Poll:  ${statusUrl}`);
+    printWebUrl(res.data);
 
     if (options.wait && id) {
       const timeoutMs = Math.max(10, Number(options.timeout ?? "600")) * 1000;
@@ -191,6 +193,7 @@ export async function blogsPublishCommand(
       }
     );
     console.log(`SUCCESS: Publish requested for article ${articleId}.`);
+    printWebUrl(res.data);
     if (res.data?.checkoutUrl) {
       console.log(`-> Upgrade: ${res.data.checkoutUrl}`);
     }

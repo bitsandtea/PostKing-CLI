@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 const VALID_PLATFORMS = ["x", "linkedin", "facebook", "instagram", "threads"];
 
@@ -79,6 +80,7 @@ export async function postsCreateCommand(options: PostsCreateOptions): Promise<v
 
     console.log("Tip: Use 'pking posts approve <id>' to confirm and schedule this post.");
     process.stderr.write("Tip: attach visuals with 'pking visuals pick <postId> --platform <p>' after creation.\n");
+    printWebUrl(res.data);
   } catch (err: unknown) {
     process.exit(1);
   }
@@ -167,6 +169,7 @@ export async function postsApproveCommand(postId: string, options: PostsApproveO
     } else {
       console.log(`  Added to automated queue.`);
     }
+    printWebUrl(res.data);
   } catch (err: any) {
     console.error(`ERROR: Failed to approve post ${postId}.`);
     if (err.response?.data?.message) {
@@ -446,6 +449,7 @@ export async function postsRescheduleCommand(postId: string, options: { date: st
       scheduledAt: scheduled.toISOString()
     });
     console.log(`SUCCESS: Post ${postId} rescheduled to ${new Date(res.data.post.postAt).toLocaleString()}.`);
+    printWebUrl(res.data);
   } catch (err: any) {
     console.error(`ERROR: Failed to reschedule post ${postId}.`);
     if (err.response?.data?.error) {

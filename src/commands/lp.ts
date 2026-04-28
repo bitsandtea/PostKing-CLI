@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -78,6 +79,7 @@ export async function lpGenerateCommand(options: {
     });
     const slug = res.data.slug ?? res.data.landingPage?.slug;
     console.log(`SUCCESS: Landing page generation started. Slug: ${slug}`);
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -90,11 +92,12 @@ export async function lpEditCommand(
 ): Promise<void> {
   const client = createClient();
   try {
-    await client.patch(`/api/agent/v1/landing-pages/${slug}`, {
+    const res = await client.patch(`/api/agent/v1/landing-pages/${slug}`, {
       title: options.title,
       instructions: options.instructions,
     });
     console.log(`SUCCESS: Landing page ${slug} updated.`);
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -107,6 +110,7 @@ export async function lpPublishCommand(slug: string): Promise<void> {
     const res = await client.post(`/api/agent/v1/landing-pages/${slug}/publish`);
     console.log(`SUCCESS: Landing page ${slug} published.`);
     if (res.data?.url) console.log(`URL: ${res.data.url}`);
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
