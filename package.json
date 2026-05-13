@@ -1,6 +1,6 @@
 {
   "name": "postking-cli",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "description": "PostKing CLI for autonomous agents — authenticate, manage brands, schedule posts, and more.",
   "main": "dist/index.js",
   "bin": {
