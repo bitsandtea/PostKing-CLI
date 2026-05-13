@@ -5,7 +5,7 @@ import { loginWithPasswordCommand, meCommand, registerCommand } from "./commands
 import { authorsCreateCommand, authorsListCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
 import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
 import { jobsListCommand } from "./commands/jobs";
-import { brandCreateCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand, brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand";
+import { brandCreateCommand, brandDeleteCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand, brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand";
 import { domainsAddCommand, domainsConnectCommand, domainsDeleteCommand } from "./commands/domains-extra";
 import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
@@ -271,6 +271,14 @@ brand
   .option("--tone <tone>", "Initial tone description")
   .option("--audience <audience>", "Target audience description")
   .action((name: string, options: { description?: string, website?: string, tone?: string, audience?: string }) => brandCreateCommand(name, options));
+
+brand
+  .command("delete <brandId>")
+  .description("Delete a brand workspace (owner only; soft-delete — disables all access).")
+  .option("--destructive", "Required confirmation flag")
+  .option("--confirm <value>", "Typed confirmation (brand name); required with --json, optional otherwise")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string, opts: { destructive?: boolean; json?: boolean; confirm?: string }) => brandDeleteCommand(brandId, opts));
 
 // ─── onboard ─────────────────────────────────────────────────────────────────
 program

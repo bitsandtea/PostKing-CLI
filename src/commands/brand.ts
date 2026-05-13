@@ -592,6 +592,80 @@ export async function brandOnboardCommand(websiteUrl: string, options: { name?: 
   }
 }
 
+async function promptLine(question: string): Promise<string> {
+  const readline = await import("readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+export async function brandDeleteCommand(
+  brandId: string,
+  options: { destructive?: boolean; json?: boolean; confirm?: string }
+): Promise<void> {
+  if (!options.destructive) {
+    console.error("ERROR: Pass --destructive to confirm deletion.");
+    process.exit(1);
+  }
+
+  const client = createClient();
+
+  // Fetch the brand to get its name for the confirmation prompt.
+  let brandName: string | null = null;
+  try {
+    const res = await client.get(`/api/agent/v1/brands/${brandId}`);
+    const data = res.data || {};
+    brandName = typeof data.name === "string" ? data.name : (data.brand && typeof data.brand.name === "string" ? data.brand.name : null);
+  } catch (err: unknown) {
+    console.error(`\nERROR: Could not fetch brand "${brandId}": ${extractApiError(err)}`);
+    process.exit(1);
+  }
+
+  const expected = brandName && brandName.trim().length > 0 ? brandName : brandId;
+  const tokenLabel = brandName && brandName.trim().length > 0 ? "brand name" : "brand ID";
+
+  // Non-interactive path: --json requires --confirm <expected>.
+  if (options.json) {
+    if (!options.confirm) {
+      console.error(`ERROR: --confirm <${tokenLabel}> is required in non-interactive mode (--json).`);
+      process.exit(1);
+    }
+    if (options.confirm !== expected) {
+      console.error(`ERROR: --confirm value does not match the ${tokenLabel}.`);
+      process.exit(1);
+    }
+  } else if (options.confirm !== undefined) {
+    // Scripted confirmation without --json: still allow skipping the prompt if it matches.
+    if (options.confirm !== expected) {
+      console.error(`ERROR: --confirm value does not match the ${tokenLabel}.`);
+      process.exit(1);
+    }
+  } else {
+    // Interactive confirmation.
+    const answer = await promptLine(`To confirm deletion of brand "${expected}", type the ${tokenLabel} exactly:\n> `);
+    if (answer !== expected) {
+      console.error(`ERROR: Confirmation did not match. Aborting.`);
+      process.exit(1);
+    }
+  }
+
+  try {
+    const res = await client.delete(`/api/agent/v1/brands/${brandId}`);
+    if (options.json) {
+      console.log(JSON.stringify(res.data, null, 2));
+      return;
+    }
+    console.log(`SUCCESS: Brand "${expected}" deleted.`);
+  } catch (err: unknown) {
+    console.error(`\nERROR: ${extractApiError(err)}`);
+    process.exit(1);
+  }
+}
+
 export async function brandCreateCommand(name: string, options: { description?: string, website?: string, tone?: string, audience?: string }): Promise<void> {
   const client = createClient();
   console.log(`\n🛠  Creating brand '${name}'...`);
