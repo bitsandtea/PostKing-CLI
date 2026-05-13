@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getApiUrl, setConfig } from "../config";
 import { POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS as MAX_ATTEMPTS } from "../constants";
+import { USER_AGENT } from "../client";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,6 +18,7 @@ export async function loginCommand(): Promise<void> {
 
   const isLocal = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
   const authClient = axios.create({
+    headers: { "User-Agent": USER_AGENT },
     httpsAgent: isLocal ? new (require('https')).Agent({ rejectUnauthorized: false }) : undefined
   });
 

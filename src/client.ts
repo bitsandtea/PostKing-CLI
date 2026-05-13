@@ -1,6 +1,10 @@
 import axios, { AxiosInstance } from "axios";
+import * as os from "os";
 import { getApiKey, getApiUrl, isEnvVarAuth } from "./config";
 import { REQUEST_TIMEOUT_MS } from "./constants";
+
+const pkg = require("../package.json");
+export const USER_AGENT = `postking-cli/${pkg.version} ${process.version} ${os.platform()}`;
 
 export function createClient(): AxiosInstance {
   const apiKey = getApiKey();
@@ -16,6 +20,7 @@ export function createClient(): AxiosInstance {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      "User-Agent": USER_AGENT,
     },
     timeout: REQUEST_TIMEOUT_MS,
     // Support local self-signed certs if testing against localhost
@@ -31,6 +36,14 @@ export function createClient(): AxiosInstance {
     (error) => {
       if (error.response) {
         const { status, data } = error.response;
+        if (status === 426) {
+          const minimum = data?.minimum ?? "unknown";
+          const yours = data?.yours ?? pkg.version;
+          const upgrade = data?.upgrade ?? "npm i -g postking-cli@latest";
+          console.error(`✗ Your postking-cli is too old. Server requires ${minimum}; you have ${yours}.`);
+          console.error(`  Upgrade: ${upgrade}`);
+          process.exit(2);
+        }
         // v0.1 uniform agent error envelope
         const envelope = data?.error;
         if (envelope && typeof envelope === "object") {

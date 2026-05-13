@@ -3,6 +3,7 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { getApiUrl, setConfig } from "../config";
+import { USER_AGENT } from "../client";
 
 const PENDING_FILE = path.join(os.homedir(), ".pking", "pending-login.json");
 
@@ -15,6 +16,7 @@ interface PendingLogin {
 function makeAuthClient(apiUrl: string) {
   const isLocal = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
   return axios.create({
+    headers: { "User-Agent": USER_AGENT },
     httpsAgent: isLocal
       ? new (require("https").Agent)({ rejectUnauthorized: false })
       : undefined,

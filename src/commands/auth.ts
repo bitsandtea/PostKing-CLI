@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getApiUrl, setConfig, isEnvVarAuth } from "../config";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "../constants";
+import { USER_AGENT } from "../client";
 
 interface AuthOptions {
   email: string;
@@ -19,6 +20,7 @@ async function deviceFlow(
 ): Promise<string> {
   const isLocal = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
   const authClient = axios.create({
+    headers: { "User-Agent": USER_AGENT },
     httpsAgent: isLocal
       ? new (require("https")).Agent({ rejectUnauthorized: false })
       : undefined,

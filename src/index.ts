@@ -45,6 +45,7 @@ import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } fro
 import { userCreditsCommand } from "./commands/user";
 import { voiceListCommand, voiceRewriteCommand } from "./commands/voice";
 import { trendsListCommand } from "./commands/trends";
+import { runUpdateCheck } from "./update-check";
 import {
   visualsCardsEditCommand,
   visualsCardsListCommand,
@@ -82,7 +83,11 @@ program
     "PostKing — Programmatically manage brands, schedule posts, and control your marketing stack.\n" +
     "Designed for autonomous agents (Claude, OpenClaw, etc.) and power users."
   )
-  .version(require("../package.json").version)
+  .version(require("../package.json").version);
+
+runUpdateCheck(require("../package.json").version);
+
+program
   .addHelpText('after', `
 Examples:
   $ pking login
