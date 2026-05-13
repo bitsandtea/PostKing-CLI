@@ -82,7 +82,7 @@ program
     "PostKing — Programmatically manage brands, schedule posts, and control your marketing stack.\n" +
     "Designed for autonomous agents (Claude, OpenClaw, etc.) and power users."
   )
-  .version("0.1.0")
+  .version(require("../package.json").version)
   .addHelpText('after', `
 Examples:
   $ pking login
