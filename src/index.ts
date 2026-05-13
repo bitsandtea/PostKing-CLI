@@ -11,7 +11,7 @@ import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
 import { loginCommand } from "./commands/login";
-import { loginStartCommand, loginFinishCommand } from "./commands/auth-device";
+import { loginStartCommand, loginFinishCommand, registerStartCommand, registerFinishCommand } from "./commands/auth-device";
 import { logoutCommand } from "./commands/logout";
 import {
   lpDeleteCommand,
@@ -162,6 +162,26 @@ program
     "retry after the user confirms). Use after 'pking login-start'."
   )
   .action(loginFinishCommand);
+
+// ─── register-start / register-finish (agent-friendly, non-blocking) ─────────
+program
+  .command("register-start")
+  .description(
+    "Start a device-flow registration without polling. Sends the magic-link\n" +
+    "email and saves the device_code locally. Use this from agent skills."
+  )
+  .requiredOption("--email <email>", "Email address to register")
+  .option("--client-name <name>", "Display name for the issued API key", "pking-cli")
+  .action((opts) => registerStartCommand({ email: opts.email, clientName: opts.clientName }));
+
+program
+  .command("register-finish")
+  .description(
+    "Finish a previously-started device-flow registration. Calls the token\n" +
+    "endpoint ONCE; exits with status 2 if the user has not clicked the magic\n" +
+    "link yet. Use after 'pking register-start'."
+  )
+  .action(registerFinishCommand);
 
 // ─── logout ──────────────────────────────────────────────────────────────────
 program
