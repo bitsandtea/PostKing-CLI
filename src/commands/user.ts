@@ -1,4 +1,5 @@
 import { createClient } from "../client";
+import { extractApiError } from "../api-error";
 
 export async function userCreditsCommand(): Promise<void> {
   const client = createClient();
@@ -15,7 +16,7 @@ export async function userCreditsCommand(): Promise<void> {
       console.log("💡 Tip: You can top up your credits at postking.app/billing\n");
     }
   } catch (err: any) {
-    console.error(`\n❌ ERROR: ${err.response?.data?.error || err.message}\n`);
+    console.error(`\n❌ ERROR: ${extractApiError(err)}\n`);
     process.exit(1);
   }
 }

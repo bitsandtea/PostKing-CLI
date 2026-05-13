@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 interface SocialAccount {
   id: string;
@@ -87,11 +88,7 @@ export async function socialConnectCommand(): Promise<void> {
     console.log("Note: This link is single-use and valid for 15 minutes.\n");
   } catch (err: any) {
     console.error("\n❌ ERROR: Could not generate connection link.");
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    } else {
-      console.error(`Status: ${err.response?.status || "Unknown"}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -146,9 +143,7 @@ export async function socialDisconnectCommand(platformOrId: string): Promise<voi
     console.log(`SUCCESS: ${platformName} account disconnected.`);
   } catch (err: any) {
     console.error(`ERROR: Failed to disconnect account.`);
-    if (err.response?.data?.message) {
-      console.error(`Reason: ${err.response.data.message}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

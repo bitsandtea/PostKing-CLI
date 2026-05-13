@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
+import { extractApiError } from "../api-error";
 
 const VALID_PLATFORMS = ["x", "linkedin", "facebook", "instagram", "threads"];
 
@@ -172,9 +173,7 @@ export async function postsApproveCommand(postId: string, options: PostsApproveO
     printWebUrl(res.data);
   } catch (err: any) {
     console.error(`ERROR: Failed to approve post ${postId}.`);
-    if (err.response?.data?.message) {
-      console.error(`Reason: ${err.response.data.message}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -377,9 +376,7 @@ export async function postsViewCommand(postId: string): Promise<void> {
     console.log("");
   } catch (err: any) {
     console.error(`ERROR: Could not fetch post ${postId}.`);
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -416,9 +413,7 @@ export async function postsCancelCommand(postId: string): Promise<void> {
     console.log(`SUCCESS: Post ${postId} cancelled/unapproved.`);
   } catch (err: any) {
     console.error(`ERROR: Failed to cancel post ${postId}.`);
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -452,9 +447,7 @@ export async function postsRescheduleCommand(postId: string, options: { date: st
     printWebUrl(res.data);
   } catch (err: any) {
     console.error(`ERROR: Failed to reschedule post ${postId}.`);
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -473,9 +466,7 @@ export async function postsDeleteCommand(postId: string): Promise<void> {
     console.log(`SUCCESS: Post ${postId} deleted.`);
   } catch (err: any) {
     console.error(`ERROR: Failed to delete post ${postId}.`);
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -533,11 +524,7 @@ export async function postsGenerateBatchCommand(options: {
     console.log("");
   } catch (err: any) {
     console.error(`\n❌ ERROR: Bulk generation failed.`);
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    } else {
-      console.error(err.message);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

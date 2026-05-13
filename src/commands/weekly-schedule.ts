@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 interface DayMediumConfig {
   medium: string;
@@ -130,8 +131,7 @@ export async function weeklyScheduleGetCommand(): Promise<void> {
     console.log("");
   } catch (err: unknown) {
     console.error("ERROR: Could not fetch weekly schedule.");
-    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    if (msg) console.error(`Reason: ${msg}`);
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -230,8 +230,7 @@ export async function weeklyScheduleSetCommand(options: SetOptions): Promise<voi
     console.log("");
   } catch (err: unknown) {
     console.error("ERROR: Could not save weekly schedule.");
-    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    if (msg) console.error(`Reason: ${msg}`);
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -245,8 +244,7 @@ async function toggle(enabled: boolean): Promise<void> {
     console.log(`SUCCESS: Weekly schedule ${schedule.enabled ? "ENABLED" : "DISABLED"}.`);
   } catch (err: unknown) {
     console.error(`ERROR: Could not ${enabled ? "enable" : "disable"} weekly schedule.`);
-    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    if (msg) console.error(`Reason: ${msg}`);
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -262,8 +260,7 @@ export async function weeklyScheduleDeleteCommand(): Promise<void> {
     console.log("SUCCESS: Weekly schedule removed.");
   } catch (err: unknown) {
     console.error("ERROR: Could not remove weekly schedule.");
-    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    if (msg) console.error(`Reason: ${msg}`);
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -291,8 +288,7 @@ export async function weeklyScheduleRunDayCommand(options: { date?: string }): P
     }
   } catch (err: unknown) {
     console.error("ERROR: Could not trigger smart-week run.");
-    const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-    if (msg) console.error(`Reason: ${msg}`);
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

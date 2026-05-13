@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -24,8 +25,7 @@ export async function authorsListCommand(): Promise<void> {
       }
     );
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -45,8 +45,7 @@ export async function authorsCreateCommand(options: {
     });
     console.log(`SUCCESS: Author created. ID: ${res.data.id ?? res.data.author?.id}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -64,8 +63,7 @@ export async function categoriesListCommand(options: { publication: string }): P
       console.log(`  ${c.id}  ${c.name}  (/${c.slug})`)
     );
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -89,8 +87,7 @@ export async function categoriesCreateCommand(options: {
     );
     console.log(`SUCCESS: Category created. ID: ${res.data.id ?? res.data.category?.id}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

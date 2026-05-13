@@ -1,4 +1,5 @@
 import { createClient } from "../client";
+import { extractApiError } from "../api-error";
 
 interface ApiKey {
   id: string;
@@ -27,8 +28,7 @@ export async function keysListCommand(): Promise<void> {
       if (k.prefix) console.log(`    prefix: ${k.prefix}...`);
     });
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -52,8 +52,7 @@ export async function keysCreateCommand(options: {
     console.log(`Token: ${token}`);
     console.log("\nWARNING: This is the ONLY time the raw token will be shown. Store it now.");
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -64,8 +63,7 @@ export async function keysRevokeCommand(keyId: string): Promise<void> {
     await client.delete(`/api/agent/v1/keys/${keyId}`);
     console.log(`SUCCESS: API key ${keyId} revoked.`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

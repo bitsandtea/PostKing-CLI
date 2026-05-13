@@ -2,6 +2,7 @@ import axios from "axios";
 import { getApiUrl, setConfig } from "../config";
 import { POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS as MAX_ATTEMPTS } from "../constants";
 import { USER_AGENT } from "../client";
+import { extractApiError } from "../api-error";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,9 +29,7 @@ export async function loginCommand(): Promise<void> {
     userCode = res.data.user_code;
     verificationUri = res.data.verification_uri;
   } catch (err: unknown) {
-    const message = axios.isAxiosError(err)
-      ? err.response?.data?.message || err.response?.data?.error || err.message
-      : String(err);
+    const message = extractApiError(err);
     console.error(`\n❌ ERROR: Failed to initiate authentication — ${message}`);
     if (isLocal) {
        console.error(`  Target: ${apiUrl}`);
@@ -90,7 +89,7 @@ export async function loginCommand(): Promise<void> {
         console.error("ERROR: The human denied the authorization request.");
         process.exit(1);
       } else {
-        console.error("ERROR: Unexpected polling error:", err.response?.data?.error || err.message);
+        console.error(`ERROR: Unexpected polling error: ${extractApiError(err)}`);
         process.exit(1);
       }
     }

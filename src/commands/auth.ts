@@ -2,6 +2,7 @@ import axios from "axios";
 import { getApiUrl, setConfig, isEnvVarAuth } from "../config";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "../constants";
 import { USER_AGENT } from "../client";
+import { extractApiError } from "../api-error";
 
 interface AuthOptions {
   email: string;
@@ -129,8 +130,7 @@ export async function meCommand(): Promise<void> {
       console.log(`  - ${b.brandId}  ${b.name}`);
     });
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

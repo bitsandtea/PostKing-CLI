@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 const SUPPORTED = ["linkedin", "x", "instagram", "threads", "facebook"];
 
@@ -31,8 +32,7 @@ export async function socialConnectPlatformCommand(options: {
       "\nOpen in browser. You'll be taken directly to the platform's OAuth flow."
     );
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -22,8 +23,7 @@ export async function publicationsListCommand(): Promise<void> {
       if (p.description) console.log(`    ${p.description}`);
     });
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -41,8 +41,7 @@ export async function publicationsCreateCommand(options: {
     });
     console.log(`SUCCESS: Publication created. ID: ${res.data.id}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

@@ -1,6 +1,7 @@
 
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 export async function editorRewriteCommand(options: { text: string; voice?: string; platform?: string }): Promise<void> {
   const client = createClient();
@@ -31,12 +32,10 @@ export async function editorRewriteCommand(options: { text: string; voice?: stri
     console.log("------------------------------------------\n");
   } catch (err: any) {
     console.error("❌ ERROR: Rewrite failed.");
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    } else if (err.code === "ECONNABORTED") {
+    if (err.code === "ECONNABORTED") {
       console.error("Reason: Request timed out. This can happen with deep voice generation.");
     } else {
-      console.error(`Reason: ${err.message || "Unknown error"}`);
+      console.error(`Reason: ${extractApiError(err)}`);
     }
     process.exit(1);
   }
@@ -74,12 +73,10 @@ export async function editorHumanizeCommand(options: { text: string; platform?: 
     console.log("");
   } catch (err: any) {
     console.error("❌ ERROR: Humanization failed.");
-    if (err.response?.data?.error) {
-      console.error(`Reason: ${err.response.data.error}`);
-    } else if (err.code === "ECONNABORTED") {
+    if (err.code === "ECONNABORTED") {
       console.error("Reason: Request timed out. This can happen with deep voice generation.");
     } else {
-      console.error(`Reason: ${err.message || "Unknown error"}`);
+      console.error(`Reason: ${extractApiError(err)}`);
     }
     process.exit(1);
   }
@@ -129,7 +126,7 @@ export async function editorAICheckCommand(options: { text: string }): Promise<v
     console.log("------------------------------------------\n");
   } catch (err: any) {
     console.error("❌ ERROR: Detection check failed.");
-    console.error(err.response?.data?.error || err.message || err);
+    console.error(extractApiError(err));
     process.exit(1);
   }
 }

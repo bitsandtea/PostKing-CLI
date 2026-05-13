@@ -1,4 +1,5 @@
 import { createClient } from "../client";
+import { extractApiError } from "../api-error";
 
 interface TrendPost {
   id: string;
@@ -107,8 +108,7 @@ export async function trendsListCommand(options: TrendsListOptions): Promise<voi
 
     console.log(`Tip: use --json to feed the full payload (including deconstruction templates) into a generator.`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

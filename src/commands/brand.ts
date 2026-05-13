@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId, setConfig } from "../config";
+import { extractApiError } from "../api-error";
 
 interface Brand {
   id: string;
@@ -221,7 +222,7 @@ export async function brandThemesEditCommand(themeId: string, options: { title?:
     await client.put(`/api/brands/${brandId}/themes/${themeId}`, options);
     console.log("✅ Theme updated successfully.\n");
   } catch (err: any) {
-    console.error(`❌ ERROR: ${err.response?.data?.message || err.message}`);
+    console.error(`❌ ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -241,7 +242,7 @@ export async function brandThemesDeleteCommand(themeId: string): Promise<void> {
     await client.delete(`/api/brands/${brandId}/themes/${themeId}`);
     console.log("✅ Theme deleted successfully.\n");
   } catch (err: any) {
-    console.error(`❌ ERROR: ${err.response?.data?.message || err.message}`);
+    console.error(`❌ ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -346,7 +347,7 @@ export async function brandThemesGenerateCommand(options: { count?: string; inst
     }
 
   } catch (err: any) {
-    console.error(`\n\n❌ ERROR: ${err.response?.data?.error || err.message}`);
+    console.error(`\n\n❌ ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -416,7 +417,7 @@ export async function brandOnboardCommand(websiteUrl: string, options: { name?: 
     }
 
   } catch (err: any) {
-    console.error(`\n\nERROR: ${err.response?.data?.error || err.message}`);
+    console.error(`\n\nERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -443,7 +444,7 @@ export async function brandCreateCommand(name: string, options: { description?: 
     console.log("\nNext step: Run 'pking brand info' to see the profile or 'pking social check' to connect accounts.");
 
   } catch (err: any) {
-    console.error(`\n\nERROR: ${err.response?.data?.error || err.message}`);
+    console.error(`\n\nERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

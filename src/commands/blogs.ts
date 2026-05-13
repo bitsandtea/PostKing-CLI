@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
+import { extractApiError } from "../api-error";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -29,8 +30,7 @@ export async function blogsListCommand(options: { status?: string }): Promise<vo
       console.log(`  ${a.id}  [${a.status}]  ${a.postTitle ?? a.title ?? ""}`)
     );
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -48,8 +48,7 @@ export async function blogsCreateCommand(options: {
     });
     console.log(`SUCCESS: Publication created. ID: ${res.data.id}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -98,8 +97,7 @@ export async function blogsGenerateCommand(options: {
       }
     }
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -171,8 +169,7 @@ export async function blogsStatusCommand(blogId: string): Promise<void> {
     }
     if (op.error) console.log(`Error:    ${op.error}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -198,13 +195,7 @@ export async function blogsPublishCommand(
       console.log(`-> Upgrade: ${res.data.checkoutUrl}`);
     }
   } catch (err) {
-    const e = err as {
-      response?: { data?: { error?: { message?: string; checkoutUrl?: string } } };
-      message: string;
-    };
-    const env = e.response?.data?.error;
-    console.error(`ERROR: ${env?.message ?? e.message}`);
-    if (env?.checkoutUrl) console.error(`-> Upgrade: ${env.checkoutUrl}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -221,8 +212,7 @@ export async function blogsViewCommand(articleId: string): Promise<void> {
     console.log(`Excerpt: ${a.postExcerpt ?? ""}`);
     console.log(`\n${(a.postText ?? "").slice(0, 3000)}`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -234,8 +224,7 @@ export async function blogsDeleteCommand(articleId: string): Promise<void> {
     await client.delete(`/api/agent/v1/brands/${brandId}/blogs/${articleId}`);
     console.log(`SUCCESS: Article ${articleId} deleted.`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

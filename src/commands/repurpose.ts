@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 interface RepurposeCommandOptions {
   sourceType: string;
@@ -111,11 +112,7 @@ export async function repurposeCommand(options: RepurposeCommandOptions): Promis
     }
   } catch (err: any) {
     console.error("❌ ERROR: Repurpose failed.");
-    if (err.response?.data?.error || err.response?.data?.message) {
-      console.error(`Reason: ${err.response.data.error || err.response.data.message}`);
-    } else {
-      console.error(`Reason: ${err.message || "Unknown error"}`);
-    }
+    console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

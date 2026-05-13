@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 interface BrandJob {
   id: string;
@@ -43,8 +44,7 @@ export async function jobsListCommand(options: { status?: string; limit?: string
       if (j.successRedirectUrl) console.log(`    -> ${j.successRedirectUrl}`);
     }
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }

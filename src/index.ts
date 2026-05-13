@@ -11,7 +11,7 @@ import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
 import { loginCommand } from "./commands/login";
-import { loginStartCommand, loginFinishCommand, registerStartCommand, registerFinishCommand } from "./commands/auth-device";
+import { loginStartCommand, loginFinishCommand, registerStartCommand, registerFinishCommand, resendCommand, resetPasswordCommand, resetPasswordFinishCommand } from "./commands/auth-device";
 import { logoutCommand } from "./commands/logout";
 import {
   lpDeleteCommand,
@@ -182,6 +182,31 @@ program
     "link yet. Use after 'pking register-start'."
   )
   .action(registerFinishCommand);
+
+program
+  .command("resend")
+  .description("Resend the magic link for a pending registration or login.")
+  .action(resendCommand);
+
+program
+  .command("reset-password")
+  .description(
+    "Start a password reset via the device flow. Sends a reset link to the\n" +
+    "given email; once the user clicks it and sets a new password, run\n" +
+    "'pking reset-password-finish' to retrieve the API key."
+  )
+  .requiredOption("--email <email>", "Email address of the account to reset")
+  .option("--client-name <name>", "Display name for the issued API key", "pking-cli")
+  .action((opts) => resetPasswordCommand({ email: opts.email, clientName: opts.clientName }));
+
+program
+  .command("reset-password-finish")
+  .description(
+    "Finish a previously-started password reset. Calls the token endpoint\n" +
+    "ONCE; exits with status 2 if the user has not clicked the reset link yet.\n" +
+    "Use after 'pking reset-password'."
+  )
+  .action(resetPasswordFinishCommand);
 
 // ─── logout ──────────────────────────────────────────────────────────────────
 program

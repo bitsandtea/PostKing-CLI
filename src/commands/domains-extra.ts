@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { extractApiError } from "../api-error";
 
 export async function domainsAddCommand(domain: string): Promise<void> {
   const client = createClient();
@@ -16,8 +17,7 @@ export async function domainsAddCommand(domain: string): Promise<void> {
       console.log(`  TXT  @  ${res.data.verificationToken}`);
     }
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -28,8 +28,7 @@ export async function domainsDeleteCommand(id: string): Promise<void> {
     await client.delete(`/api/agent/v1/domains/${id}`);
     console.log(`SUCCESS: Domain ${id} removed.`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -43,8 +42,7 @@ export async function domainsConnectCommand(
     await client.post(`/api/agent/v1/domains/${id}/connect`, { target: options.target });
     console.log(`SUCCESS: Domain ${id} connected to ${options.target}.`);
   } catch (err) {
-    const e = err as { response?: { data?: { error?: { message?: string } } }; message: string };
-    console.error(`ERROR: ${e.response?.data?.error?.message ?? e.message}`);
+    console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
