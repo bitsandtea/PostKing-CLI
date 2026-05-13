@@ -1,3 +1,4 @@
+import axios from "axios";
 import { createClient } from "../client";
 import { getBrandId, setConfig } from "../config";
 import { extractApiError } from "../api-error";
@@ -12,6 +13,65 @@ interface Brand {
   audienceData?: string;
   blogContext?: string;
   themes?: Array<{ id: string; title: string; content: string; intent?: string }>;
+}
+
+interface DemographicsDetails {
+  experience?: string;
+  ageRange?: string;
+  education?: string;
+  industry?: string;
+  companySize?: string;
+  location?: string;
+}
+
+interface Demographics extends DemographicsDetails {
+  primaryRoles?: string[];
+  details?: DemographicsDetails;
+}
+
+interface AwarenessLevel {
+  description?: string;
+  symptoms?: string[];
+  language?: string[];
+  behaviors?: string[];
+  concerns?: string[];
+  needs?: string[];
+  messaging?: string;
+}
+
+interface AudienceGroup {
+  demographics?: Demographics;
+  psyche?: { values?: string[]; motivations?: string[]; frustrations?: string[] };
+  painPoints?: { primary?: string[]; emotional?: string[]; technical?: string[] };
+  awarenessLevels?: Record<string, AwarenessLevel | undefined>;
+  trustSources?: string[];
+  objections?: string[];
+  onlinePresence?: string[];
+  events?: string[];
+}
+
+interface PositioningGroup {
+  keyFeatures?: string[];
+  successStories?: string[];
+  problemsSolved?: string[];
+  technicalAdvantages?: string[];
+  founderCredibility?: string[];
+  productEvolution?: string[];
+  marketPosition?: string[];
+  callsToAction?: string[];
+}
+
+interface AudienceEndpointResponse {
+  brandId: string;
+  name: string;
+  websiteUrl?: string;
+  lastAnalyzed?: string;
+  audienceData?: AudienceGroup | null;
+  blogContext?: PositioningGroup | null;
+  contentModulation?: unknown;
+  tone?: string;
+  audience?: string;
+  description?: string;
 }
 
 export async function brandListCommand(): Promise<void> {
@@ -48,108 +108,164 @@ export async function brandListCommand(): Promise<void> {
   }
 }
 
-export function displayBrandProfile(brand: Brand): void {
-  let parsedAudience: any = {};
-  let parsedContext: any = {};
+interface BrandRevealInput {
+  id: string;
+  name: string;
+  description?: string;
+  tone?: string;
+  audience?: string;
+  audienceGroup?: AudienceGroup | null;
+  positioning?: PositioningGroup | null;
+  themes?: Array<{ id: string; title: string; content: string; intent?: string }>;
+}
 
-  if (brand.audienceData) {
-    try {
-      parsedAudience = JSON.parse(brand.audienceData);
-    } catch (e) {}
-  }
-  if (brand.blogContext) {
-    try {
-      parsedContext = JSON.parse(brand.blogContext);
-    } catch (e) {}
-  }
+export function displayBrandProfile(input: BrandRevealInput): void {
+  const audience = input.audienceGroup || undefined;
+  const positioning = input.positioning || undefined;
 
   const divider = "=".repeat(64);
   console.log("\n" + divider);
-  console.log(`BRAND PROFILE: ${brand.name.toUpperCase()}`);
+  console.log(`BRAND PROFILE: ${input.name.toUpperCase()}`);
   console.log(divider);
-  console.log(`\nID:       ${brand.id}`);
-  if (brand.description) console.log(`DESC:     ${brand.description}`);
-  
-  // ─── Tone ──────────────────────────────────────────────────────────────────
-  console.log("\n[ TONE & PERSONALITY ]");
-  console.log(`TONE:     ${brand.tone || "Not analyzed yet."}`);
-  
-  if (parsedAudience.psyche) {
-    const p = parsedAudience.psyche;
-    if (p.values?.length) console.log(`VALUES:   ${p.values.join(", ")}`);
-    if (p.motivations?.length) console.log(`DRIVERS:  ${p.motivations.join(", ")}`);
-    if (p.frustrations?.length) console.log(`FEARS:    ${p.frustrations.join(", ")}`);
+  console.log(`\nID:       ${input.id}`);
+  if (input.description) console.log(`DESC:     ${input.description}`);
+
+  // ─── Tone & Personality ────────────────────────────────────────────────────
+  const psyche = audience?.psyche;
+  const hasPsyche = !!(psyche && (psyche.values?.length || psyche.motivations?.length || psyche.frustrations?.length));
+  if (input.tone || hasPsyche) {
+    console.log("\n[ TONE & PERSONALITY ]");
+    if (input.tone) console.log(`TONE:     ${input.tone}`);
+    if (psyche?.values?.length) console.log(`VALUES:   ${psyche.values.join(", ")}`);
+    if (psyche?.motivations?.length) console.log(`DRIVERS:  ${psyche.motivations.join(", ")}`);
+    if (psyche?.frustrations?.length) console.log(`FEARS:    ${psyche.frustrations.join(", ")}`);
   }
 
-  // ─── Audience ──────────────────────────────────────────────────────────────
-  console.log("\n[ AUDIENCE DEEP DIVE ]");
-  console.log(`SUMMARY:  ${brand.audience || "Not analyzed yet."}`);
-  
-  if (parsedAudience.demographics) {
-    const d = parsedAudience.demographics;
-    if (d.primaryRoles?.length) console.log(`ROLES:    ${d.primaryRoles.join(", ")}`);
-    if (d.details) {
-      const details = d.details;
-      if (details.industry) console.log(`INDUSTRY: ${details.industry}`);
-      if (details.companySize) console.log(`SIZE:     ${details.companySize}`);
-      if (details.experience) console.log(`EXP:      ${details.experience}`);
-    }
-  }
-
-  if (parsedAudience.painPoints) {
-    const p = parsedAudience.painPoints;
-    const allPain = [...new Set([...(p.primary || []), ...(p.technical || []), ...(p.emotional || [])])];
+  // ─── Audience Deep Dive ────────────────────────────────────────────────────
+  const demographics = audience?.demographics;
+  const pain = audience?.painPoints;
+  const allPain = pain
+    ? [...new Set([...(pain.primary || []), ...(pain.technical || []), ...(pain.emotional || [])])]
+    : [];
+  const hasAudienceBlock = !!(input.audience || demographics || allPain.length);
+  if (hasAudienceBlock) {
+    console.log("\n[ AUDIENCE DEEP DIVE ]");
+    if (input.audience) console.log(`SUMMARY:  ${input.audience}`);
+    if (demographics?.primaryRoles?.length) console.log(`ROLES:    ${demographics.primaryRoles.join(", ")}`);
+    const dd = demographics?.details || demographics;
+    if (dd?.industry) console.log(`INDUSTRY: ${dd.industry}`);
+    if (dd?.companySize) console.log(`SIZE:     ${dd.companySize}`);
+    if (dd?.experience) console.log(`EXP:      ${dd.experience}`);
+    if (dd?.location) console.log(`LOCATION: ${dd.location}`);
     if (allPain.length) {
       console.log("\nPAIN POINTS:");
-      allPain.forEach(pain => console.log(`  • ${pain}`));
+      allPain.slice(0, 8).forEach((p) => console.log(`  • ${p}`));
     }
   }
 
-  // ─── Awareness ─────────────────────────────────────────────────────────────
-  if (parsedAudience.awarenessLevels) {
-    console.log("\n[ AWARENESS LEVELS ]");
-    const levels = parsedAudience.awarenessLevels;
-    Object.entries(levels).forEach(([key, value]: [string, any]) => {
-      if (value?.description) {
-        console.log(`  • ${key.toUpperCase()}: ${value.description.substring(0, 100)}...`);
-      }
-    });
+  // ─── Awareness Levels ──────────────────────────────────────────────────────
+  const levels = audience?.awarenessLevels;
+  if (levels && Object.keys(levels).length) {
+    const entries = Object.entries(levels).filter(([, v]) => v && v.description);
+    if (entries.length) {
+      console.log("\n[ AWARENESS LEVELS ]");
+      entries.forEach(([key, value]) => {
+        const desc = (value as AwarenessLevel).description || "";
+        const trimmed = desc.length > 120 ? desc.substring(0, 117) + "..." : desc;
+        console.log(`  • ${key.toUpperCase()}: ${trimmed}`);
+      });
+    }
   }
 
-  // ─── Market ────────────────────────────────────────────────────────────────
-  if (parsedAudience.objections?.length || parsedAudience.trustSources?.length) {
+  // ─── Market Dynamics ───────────────────────────────────────────────────────
+  if (audience?.objections?.length || audience?.trustSources?.length) {
     console.log("\n[ MARKET DYNAMICS ]");
-    if (parsedAudience.objections?.length) {
+    if (audience.objections?.length) {
       console.log("OBJECTIONS:");
-      parsedAudience.objections.slice(0, 3).forEach((o: string) => console.log(`  • ${o}`));
+      audience.objections.slice(0, 3).forEach((o) => console.log(`  • ${o}`));
     }
-    if (parsedAudience.trustSources?.length) {
-      console.log(`TRUST:    ${parsedAudience.trustSources.join(", ")}`);
+    if (audience.trustSources?.length) {
+      console.log(`TRUST:    ${audience.trustSources.join(", ")}`);
     }
   }
 
   // ─── Product Context ───────────────────────────────────────────────────────
-  if (Object.keys(parsedContext).length) {
+  if (positioning && Object.keys(positioning).some((k) => (positioning as any)[k]?.length)) {
     console.log("\n[ PRODUCT CONTEXT ]");
-    if (parsedContext.keyFeatures?.length) console.log(`FEATURES: ${parsedContext.keyFeatures.join(", ")}`);
-    if (parsedContext.technicalAdvantages?.length) console.log(`EDGES:    ${parsedContext.technicalAdvantages.join(", ")}`);
-    if (parsedContext.marketPosition?.length) console.log(`POSITION: ${parsedContext.marketPosition.join(", ")}`);
+    if (positioning.keyFeatures?.length) console.log(`FEATURES: ${positioning.keyFeatures.join(", ")}`);
+    if (positioning.technicalAdvantages?.length) console.log(`EDGES:    ${positioning.technicalAdvantages.join(", ")}`);
+    if (positioning.marketPosition?.length) console.log(`POSITION: ${positioning.marketPosition.join(", ")}`);
+    if (positioning.problemsSolved?.length) console.log(`SOLVES:   ${positioning.problemsSolved.slice(0, 3).join(", ")}`);
   }
 
   // ─── Themes ────────────────────────────────────────────────────────────────
-  if (brand.themes && brand.themes.length) {
+  if (input.themes && input.themes.length) {
     console.log("\n[ CONTENT THEMES ]");
-    brand.themes.forEach((t, i) => {
-      console.log(`  ${i + 1}. ${t.title}${t.intent ? ` (${t.intent})` : ""}`);
+    input.themes.forEach((t, i) => {
+      const heading = `  ${i + 1}. ${t.title}${t.intent ? ` (${t.intent})` : ""}`;
+      if (t.content && t.content.trim()) {
+        console.log(heading);
+        console.log(`     ${t.content}`);
+      } else {
+        console.log(heading);
+      }
+      if (i < input.themes!.length - 1) {
+        console.log("");
+      }
     });
-    console.log("\n👉 Run 'pking brand themes' to see the full descriptions of these themes.");
   }
 
-  console.log("\n[ NEXT STEPS ]");
-  console.log("  1. Connect socials:   pking social connect");
-  console.log("  2. Generate posts:    pking posts generate --platform x --theme 'Growth'");
-  console.log("  3. Repurpose link:    pking repurpose --source-type url --target-type social --source-url '...'");
   console.log(divider + "\n");
+}
+
+/**
+ * Fetches the agent v1 audience block + themes (from /api/brands?include=themes)
+ * and returns the merged reveal input. Returns null with a friendly log if the
+ * audience analysis hasn't run yet.
+ */
+async function fetchBrandReveal(
+  client: ReturnType<typeof createClient>,
+  brandId: string
+): Promise<BrandRevealInput | null> {
+  let audienceRes: AudienceEndpointResponse | null = null;
+  try {
+    const res = await client.get(`/api/agent/v1/brands/${brandId}/audience`);
+    audienceRes = res.data;
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err)) {
+      const data = err.response?.data as Record<string, unknown> | undefined;
+      const env = data?.error as Record<string, unknown> | undefined;
+      const code = typeof env?.code === "string" ? env.code : undefined;
+      if (code === "NOT_FOUND" || err.response?.status === 404) {
+        console.log("\nAudience analysis hasn't run yet — try again in a minute, or rerun 'pking onboard'.");
+        return null;
+      }
+    }
+    throw err;
+  }
+
+  // Themes still live on /api/brands?include=themes
+  let themes: BrandRevealInput["themes"] = [];
+  let baseBrand: Brand | undefined;
+  try {
+    const themesRes = await client.get("/api/brands?include=themes");
+    const brands: Brand[] = themesRes.data.brands || [];
+    baseBrand = brands.find((b) => b.id === brandId);
+    themes = baseBrand?.themes || [];
+  } catch {
+    // Themes are optional for the reveal; soldier on.
+  }
+
+  return {
+    id: brandId,
+    name: audienceRes?.name || baseBrand?.name || "Brand",
+    description: audienceRes?.description || baseBrand?.description,
+    tone: audienceRes?.tone || baseBrand?.tone,
+    audience: audienceRes?.audience || baseBrand?.audience,
+    audienceGroup: audienceRes?.audienceData || null,
+    positioning: audienceRes?.blogContext || null,
+    themes
+  };
 }
 
 export async function brandInfoCommand(): Promise<void> {
@@ -162,18 +278,71 @@ export async function brandInfoCommand(): Promise<void> {
   }
 
   try {
-    const res = await client.get("/api/brands?include=themes,audienceData,blogContext");
-    const brands: Brand[] = res.data.brands || [];
-    const brand = brands.find(b => b.id === brandId);
+    const reveal = await fetchBrandReveal(client, brandId);
+    if (!reveal) return;
+    displayBrandProfile(reveal);
 
-    if (!brand) {
-      console.error(`ERROR: Could not find details for brand ID: ${brandId}`);
-      process.exit(1);
-    }
-
-    displayBrandProfile(brand);
-
+    console.log("[ NEXT STEPS ]");
+    console.log("");
+    console.log("Posts & content");
+    console.log("  pking posts generate --platform <x|linkedin|instagram|threads|facebook> --theme \"<title>\"");
+    console.log("  pking posts generate-bulk");
+    console.log("  pking posts calendar");
+    console.log("  pking posts list");
+    console.log("  pking repurpose --source-type url --target-type social --source-url \"<url>\"");
+    console.log("");
+    console.log("Blogs");
+    console.log("  pking blogs generate");
+    console.log("  pking blogs list");
+    console.log("  pking blogs publish <articleId>");
+    console.log("  pking publications list");
+    console.log("  pking authors list");
+    console.log("");
+    console.log("Landing pages");
+    console.log("  pking lp generate");
+    console.log("  pking lp list");
+    console.log("  pking lp vibe <slug>                  (AI-edit a landing page)");
+    console.log("  pking lp side generate <slug>         (add side-pages)");
+    console.log("  pking lp publish <slug>");
+    console.log("  pking domains list");
+    console.log("  pking domains add <domain>");
+    console.log("");
+    console.log("SEO pipeline");
+    console.log("  pking seo seeds <seeds...>");
+    console.log("  pking seo keywords");
+    console.log("  pking seo cluster");
+    console.log("  pking seo roadmap");
+    console.log("  pking seo write");
+    console.log("  pking seo publish");
+    console.log("  pking seo stats");
+    console.log("");
+    console.log("Visuals");
+    console.log("  pking visuals list");
+    console.log("  pking visuals upload");
+    console.log("  pking visuals import-url <url>");
+    console.log("  pking visuals search-stock <query>");
+    console.log("  pking visuals options <postId>        (pick imagery for a post)");
+    console.log("  pking visuals carousel <postId>");
+    console.log("");
+    console.log("Audience & themes");
+    console.log("  pking brand info                       (re-run this reveal)");
+    console.log("  pking brand themes list");
+    console.log("  pking brand themes edit <themeId>");
+    console.log("  pking brand generate-themes --count 5");
+    console.log("");
+    console.log("Socials & schedule");
+    console.log("  pking social check");
+    console.log("  pking social connect");
+    console.log("  pking weekly-schedule get");
+    console.log("  pking weekly-schedule set");
+    console.log("  pking trends list");
+    console.log("");
+    console.log("Voice (optional)");
+    console.log("  pking voice list");
+    console.log(`  Open https://postking.app/dashboard/brands/${reveal.id}/audience-review to set a personal voice profile`);
+    console.log("");
   } catch (err: unknown) {
+    console.error(`\nERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
 }
@@ -393,13 +562,14 @@ export async function brandOnboardCommand(websiteUrl: string, options: { name?: 
         setConfig({ brandId });
         console.log(`Brand ${brandId} is now set as your active workspace.`);
 
-        // Fetch full brand details for the grand reveal
-        const finalRes = await client.get("/api/brands?include=themes,audienceData,blogContext");
-        const brands: Brand[] = finalRes.data.brands || [];
-        const brand = brands.find(b => b.id === brandId);
-        
-        if (brand) {
-          displayBrandProfile(brand);
+        // Grand reveal — pulls from agent v1 audience endpoint
+        console.log("\n🎉 Here's what we learned about your brand\n");
+        const reveal = await fetchBrandReveal(client, brandId);
+        if (reveal) {
+          displayBrandProfile(reveal);
+          console.log("Next: review the content themes with 'pking brand themes', then connect a social account with 'pking social check'.\n");
+        } else {
+          console.log("Next: run 'pking brand info' in a minute to see the full audience analysis.\n");
         }
         break;
       }
