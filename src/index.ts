@@ -533,9 +533,9 @@ program
 // ─── register / login (email+password) / me ──────────────────────────────────
 program
   .command("register")
-  .description("Register a new PostKing account via email+password. Triggers a magic-link confirmation.")
+  .description("Register a new PostKing account. Triggers a magic-link confirmation — the user sets their password in the browser.")
   .requiredOption("--email <email>", "Email address")
-  .requiredOption("--password <password>", "Password")
+  .option("--password <password>", "Password (optional — omit to receive a magic link and set the password in your browser)")
   .option("--client-name <name>", "Display name for the issued API key", "pking-cli")
   .action((opts) => registerCommand({
     email: opts.email,
