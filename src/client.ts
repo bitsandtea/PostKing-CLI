@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from "axios";
-import { getApiKey, getApiUrl } from "./config";
+import { getApiKey, getApiUrl, isEnvVarAuth } from "./config";
 import { REQUEST_TIMEOUT_MS } from "./constants";
 
 export function createClient(): AxiosInstance {
@@ -7,7 +7,7 @@ export function createClient(): AxiosInstance {
   const baseURL = getApiUrl();
 
   if (!apiKey) {
-    console.error("ERROR: Not authenticated. Run 'pking login' first.");
+    console.error("Not authenticated. Run `pking login` to authorize this device.");
     process.exit(1);
   }
 
@@ -56,7 +56,7 @@ export function createClient(): AxiosInstance {
             console.error(`HUMAN_ACTION_REQUIRED: Visit: ${url}`);
           }
         } else if (status === 401) {
-          console.error("ERROR 401: Invalid or expired API key. Run 'pking login' to re-authenticate.");
+          console.error("Not authenticated. Run `pking login` to authorize this device.");
         }
       } else if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
         console.error("ERROR: Cannot reach PostKing API. Check your internet connection.");

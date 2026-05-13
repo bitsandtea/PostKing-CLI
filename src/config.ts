@@ -42,7 +42,13 @@ export function clearConfig(): void {
 }
 
 export function getApiKey(): string | undefined {
-  return readConfig().apiKey;
+  // Env var wins over stored token — no device flow needed when injected by Hermes.
+  return process.env.POSTKING_API_KEY || readConfig().apiKey;
+}
+
+/** Returns true when auth comes from the env var rather than the local config file. */
+export function isEnvVarAuth(): boolean {
+  return !!process.env.POSTKING_API_KEY;
 }
 
 export function getApiUrl(): string {

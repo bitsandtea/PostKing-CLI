@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getApiUrl, setConfig } from "../config";
+import { getApiUrl, setConfig, isEnvVarAuth } from "../config";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "../constants";
 
 interface AuthOptions {
@@ -115,9 +115,10 @@ export async function meCommand(): Promise<void> {
   try {
     const res = await client.get("/api/agent/v1/me");
     const { user, brands, activeBrandId, credits, freeTierRemaining, scope, keyName } = res.data;
+    const authSource = isEnvVarAuth() ? "POSTKING_API_KEY env var" : `stored token (${keyName ?? "—"})`;
     console.log("\n=== PostKing Account ===");
     console.log(`User:            ${user?.email ?? "—"}`);
-    console.log(`Key:             ${keyName ?? "—"} (${scope ?? "write"})`);
+    console.log(`Auth:            ${authSource} (${scope ?? "write"})`);
     console.log(`Credits:         ${credits ?? 0}`);
     console.log(`Free remaining:  ${freeTierRemaining ?? "—"}`);
     console.log(`Active brand:    ${activeBrandId ?? "none"}`);
