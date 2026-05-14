@@ -14,6 +14,7 @@ import fs from "fs";
 import path from "path";
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -113,6 +114,7 @@ export async function visualsListCommand(options: VisualsListOptions): Promise<v
       console.log(`  ${pad(a.id, 26)}  ${pad(a.type ?? "—", 10)}  ${pad(tagStr, 20)}  ${a.name ?? "—"}`);
     }
     console.log("");
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);

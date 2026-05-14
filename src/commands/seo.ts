@@ -1,5 +1,6 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -154,6 +155,7 @@ export async function seoRoadmapCommand(options: {
             `  ${it.id}  [${it.status}]  p=${it.priority ?? "—"}  ${it.title}  (${it.primaryKeyword ?? ""})`
           )
       );
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -288,6 +290,7 @@ export async function seoRoadmapViewCommand(
     console.log(`Priority: ${it.priority ?? "—"}`);
     if (it.primaryKeyword) console.log(`Keyword: ${it.primaryKeyword}`);
     if (it.clusterId) console.log(`Cluster: ${it.clusterId}`);
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);

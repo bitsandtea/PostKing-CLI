@@ -27,6 +27,7 @@ interface BrandVoiceProfile {
 interface VoiceListOptions {
   platform?: string;
   filter?: string;
+  json?: boolean;
 }
 
 interface VoiceRewriteOptions {
@@ -73,6 +74,7 @@ export async function voiceListCommand(options: VoiceListOptions = {}): Promise<
 
   try {
     const res = await client.get("/api/agent/v1/voices/public", { params });
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const voices: PublicVoice[] = res.data.voices || [];
 
     if (voices.length === 0) {

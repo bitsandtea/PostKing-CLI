@@ -1,15 +1,17 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
+import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
 
-interface BrandJob {
+interface UnifiedJob {
   id: string;
   title: string;
   status: string;
   pollUrl: string;
   successRedirectUrl?: string | null;
   createdAt: string;
-  updatedAt?: string;
+  source: "job" | "operation";
+  webUrl?: string;
 }
 
 function requireBrand(): string {
@@ -21,7 +23,7 @@ function requireBrand(): string {
   return brandId;
 }
 
-export async function jobsListCommand(options: { status?: string; limit?: string }): Promise<void> {
+export async function jobsListCommand(options: { status?: string; limit?: string; json?: boolean }): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
@@ -32,17 +34,21 @@ export async function jobsListCommand(options: { status?: string; limit?: string
     const res = await client.get(
       `/api/agent/v1/brands/${brandId}/jobs${qs ? `?${qs}` : ""}`
     );
-    const jobs = (res.data?.jobs ?? []) as BrandJob[];
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    const jobs = (res.data?.jobs ?? []) as UnifiedJob[];
     if (jobs.length === 0) {
       console.log("No jobs found.");
+      printWebUrl(res.data);
       return;
     }
     console.log(`Jobs (${jobs.length}):`);
     for (const j of jobs) {
       const created = j.createdAt ? new Date(j.createdAt).toLocaleString() : "";
-      console.log(`  [${j.status.padEnd(9)}] ${j.id}  ${j.title}  (${created})`);
+      const src = (j.source === "operation" ? "op " : "job").padEnd(3);
+      console.log(`  [${src}] [${j.status.padEnd(9)}] ${j.id}  ${j.title}  (${created})`);
       if (j.successRedirectUrl) console.log(`    -> ${j.successRedirectUrl}`);
     }
+    printWebUrl(res.data);
   } catch (err) {
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);

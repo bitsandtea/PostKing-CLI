@@ -1,6 +1,7 @@
 import axios from "axios";
 import { createClient } from "../client";
-import { getBrandId, setConfig } from "../config";
+import { getApiUrl, getBrandId, setConfig } from "../config";
+import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
 
 interface Brand {
@@ -74,12 +75,14 @@ interface AudienceEndpointResponse {
   description?: string;
 }
 
-export async function brandListCommand(): Promise<void> {
+export async function brandListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
 
   try {
     const res = await client.get("/api/brands");
     const brands: Brand[] = res.data.brands || [];
+
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
 
     if (brands.length === 0) {
       console.log("No brands found.");
@@ -268,7 +271,7 @@ async function fetchBrandReveal(
   };
 }
 
-export async function brandInfoCommand(): Promise<void> {
+export async function brandInfoCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -280,8 +283,10 @@ export async function brandInfoCommand(): Promise<void> {
   try {
     const reveal = await fetchBrandReveal(client, brandId);
     if (!reveal) return;
+    if (options.json) { console.log(JSON.stringify({ ...reveal, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` }, null, 2)); return; }
     displayBrandProfile(reveal);
 
+    printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
     console.log("[ NEXT STEPS ]");
     console.log("");
     console.log("Posts & content");

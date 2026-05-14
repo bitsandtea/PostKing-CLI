@@ -112,11 +112,12 @@ export async function loginWithPasswordCommand(options: AuthOptions): Promise<vo
   }
 }
 
-export async function meCommand(): Promise<void> {
+export async function meCommand(options: { json?: boolean } = {}): Promise<void> {
   const { createClient } = await import("../client");
   const client = createClient();
   try {
     const res = await client.get("/api/agent/v1/me");
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const { user, brands, activeBrandId, credits, freeTierRemaining, scope, keyName } = res.data;
     const authSource = isEnvVarAuth() ? "POSTKING_API_KEY env var" : `stored token (${keyName ?? "—"})`;
     console.log("\n=== PostKing Account ===");

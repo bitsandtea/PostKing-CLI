@@ -1,5 +1,6 @@
 import { createClient } from "../client";
-import { getBrandId } from "../config";
+import { getApiUrl, getBrandId } from "../config";
+import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
 
 // ─── Mediums ─────────────────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ export async function brandMediumsCommand(
         { selectedMediums: selected }
       );
       if (options.json) {
-        console.log(JSON.stringify(patchRes.data, null, 2));
+        console.log(JSON.stringify({ ...patchRes.data, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` }, null, 2));
         return;
       }
       console.log("SUCCESS: Mediums updated.\n");
@@ -121,6 +122,7 @@ export async function brandMediumsCommand(
       console.log("Then:       pking brand visual set            (logo + colors)");
       console.log("Then:       pking brand smart-week            (generate this week's content)");
       console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+      printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
       return;
     } catch (err) {
       console.error(`\nERROR: ${extractApiError(err)}`);
@@ -129,11 +131,12 @@ export async function brandMediumsCommand(
   }
 
   if (options.json) {
-    console.log(JSON.stringify(res, null, 2));
+    console.log(JSON.stringify({ ...res, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` }, null, 2));
     return;
   }
 
   renderMediums(res);
+  printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
 
   // Interactive: prompt comma-separated selection.
   console.log("Enter the comma-separated list of mediums to enable.");
@@ -149,6 +152,7 @@ export async function brandMediumsCommand(
     console.log("Then:       pking brand visual set            (logo + colors)");
     console.log("Then:       pking brand smart-week            (generate this week's content)");
     console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+    printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
     return;
   }
   let selected: string[];
@@ -172,6 +176,7 @@ export async function brandMediumsCommand(
     console.log("Then:       pking brand visual set            (logo + colors)");
     console.log("Then:       pking brand smart-week            (generate this week's content)");
     console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+    printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
   } catch (err) {
     console.error(`\nERROR: ${extractApiError(err)}`);
     process.exit(1);

@@ -1,5 +1,6 @@
 import { createClient } from "../client";
-import { getBrandId } from "../config";
+import { getApiUrl, getBrandId } from "../config";
+import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
 
 interface Brand {
@@ -14,7 +15,7 @@ interface Brand {
   themes?: Array<{ id: string; title: string; content: string; intent?: string }>;
 }
 
-export async function brandThemesCommand(): Promise<void> {
+export async function brandThemesCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -27,6 +28,8 @@ export async function brandThemesCommand(): Promise<void> {
     const res = await client.get("/api/brands?include=themes");
     const brands: Brand[] = res.data.brands || [];
     const brand = brands.find(b => b.id === brandId);
+
+    if (options.json) { console.log(JSON.stringify({ brand, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}/themes` }, null, 2)); return; }
 
     if (!brand || !brand.themes) {
       console.log("No themes found for this brand.");
@@ -42,6 +45,7 @@ export async function brandThemesCommand(): Promise<void> {
     console.log("Then:       pking brand visual set           (logo + colors)");
     console.log("Then:       pking brand smart-week           (generate this week's content)");
     console.log("Finally:    pking brand finalize             (mark onboarding complete)\n");
+    printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}/themes` });
   } catch (err: unknown) {
     process.exit(1);
   }

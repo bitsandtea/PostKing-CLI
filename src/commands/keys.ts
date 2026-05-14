@@ -11,10 +11,11 @@ interface ApiKey {
   revokedAt?: string | null;
 }
 
-export async function keysListCommand(): Promise<void> {
+export async function keysListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   try {
     const res = await client.get("/api/agent/v1/keys");
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const keys: ApiKey[] = res.data.keys || res.data || [];
     if (keys.length === 0) {
       console.log("No API keys found.");

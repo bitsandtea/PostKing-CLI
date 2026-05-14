@@ -11,11 +11,12 @@ function requireBrand(): string {
   return brandId;
 }
 
-export async function publicationsListCommand(): Promise<void> {
+export async function publicationsListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const publications = res.data.publications ?? [];
     console.log(`\nPublications (${publications.length}):`);
     publications.forEach((p: { id: string; title: string; description?: string }) => {

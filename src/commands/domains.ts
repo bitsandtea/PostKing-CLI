@@ -10,7 +10,7 @@ interface Domain {
   verificationToken?: string;
 }
 
-export async function domainsListCommand(): Promise<void> {
+export async function domainsListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -22,6 +22,7 @@ export async function domainsListCommand(): Promise<void> {
 
   try {
     const res = await client.get(`/api/domains?brandId=${brandId}`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const domains: Domain[] = res.data.domains || [];
 
     if (domains.length === 0) {

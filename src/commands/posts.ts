@@ -15,6 +15,7 @@ interface PostsListOptions {
   status?: string;
   platform?: string;
   limit?: number;
+  json?: boolean;
 }
 
 interface PostResult {
@@ -105,6 +106,8 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     const res = await client.get(`/api/brands/${brandId}/posts?${params.toString()}`);
     const posts: PostResult[] = res.data.posts || [];
 
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+
     if (posts.length === 0) {
       console.log("No posts found for this brand.");
       return;
@@ -118,6 +121,7 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     });
 
     console.log("\nUse 'pking posts generate' to draft a new post.");
+    printWebUrl(res.data);
   } catch (err) {
     process.exit(1);
   }
@@ -279,7 +283,7 @@ export async function postsGenerateCommand(options: {
   }
 }
 
-export async function postsCalendarCommand(options: { days?: string }): Promise<void> {
+export async function postsCalendarCommand(options: { days?: string; json?: boolean }): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -291,6 +295,8 @@ export async function postsCalendarCommand(options: { days?: string }): Promise<
   try {
     const res = await client.get(`/api/brands/${brandId}/posts?status=scheduled&limit=100`);
     const posts: PostResult[] = res.data.posts || [];
+
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
 
     if (posts.length === 0) {
       console.log(`No scheduled posts found for brand ${brandId}.`);
@@ -333,7 +339,7 @@ export async function postsCalendarCommand(options: { days?: string }): Promise<
   }
 }
 
-export async function postsViewCommand(postId: string): Promise<void> {
+export async function postsViewCommand(postId: string, options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -344,6 +350,7 @@ export async function postsViewCommand(postId: string): Promise<void> {
 
   try {
     const res = await client.get(`/api/brands/${brandId}/posts/${postId}`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const post: PostResult & { assets?: any[] } = res.data.post;
 
     if (!post) {
@@ -374,6 +381,7 @@ export async function postsViewCommand(postId: string): Promise<void> {
     }
 
     console.log("");
+    printWebUrl(res.data);
   } catch (err: any) {
     console.error(`ERROR: Could not fetch post ${postId}.`);
     console.error(`Reason: ${extractApiError(err)}`);

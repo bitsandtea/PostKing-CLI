@@ -228,12 +228,14 @@ const brand = program
 brand
   .command("list")
   .description("List all brands associated with your account.")
-  .action(brandListCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => brandListCommand(opts));
 
 brand
   .command("info")
   .description("View detailed profile of the active brand (audience, tone, metrics).")
-  .action(brandInfoCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => brandInfoCommand(opts));
 
 brand
   .command("generate-themes")
@@ -245,12 +247,14 @@ brand
 
 const themes = brand.command("themes")
   .description("Manage content themes.")
-  .action(brandThemesCommand); // Default to list if just `themes` is typed
+  .option("--json", "Output raw JSON")
+  .action((opts) => brandThemesCommand(opts));
 
 themes
   .command("list")
   .description("List all content themes.")
-  .action(brandThemesCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => brandThemesCommand(opts));
 
 themes
   .command("edit <themeId>")
@@ -488,12 +492,14 @@ posts
   .option("--status <status>", "Filter by status: created, scheduled, posted")
   .option("--platform <platform>", "Filter by platform: x, linkedin, etc., or 'custom:<chars>'")
   .option("--limit <number>", "Number of posts to show (default: 10)", "10")
+  .option("--json", "Output raw JSON")
   .action((options) => postsListCommand(options));
 
 posts
   .command("view <postId>")
   .description("View the full content and details of a specific post.")
-  .action((id) => postsViewCommand(id));
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => postsViewCommand(id, opts));
 
 posts
   .command("generate")
@@ -550,6 +556,7 @@ posts
   .command("calendar")
   .description("View an upcoming schedule of all automated posts.")
   .option("--days <number>", "Number of days ahead to view (default 14)")
+  .option("--json", "Output raw JSON")
   .action((options) => postsCalendarCommand(options));
 
 posts
@@ -576,7 +583,8 @@ const userSub = program
 userSub
   .command("credits")
   .description("Check your current credit balance.")
-  .action(userCreditsCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => userCreditsCommand(opts));
 
 // ─── social ──────────────────────────────────────────────────────────────────
 const social = program
@@ -589,7 +597,8 @@ social
     "List all connected (and disconnected) social media accounts for the active brand.\n" +
     "Agents should run this before posting to confirm platform availability."
   )
-  .action(socialCheckCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => socialCheckCommand(opts));
 
 social
   .command("connect")
@@ -611,10 +620,12 @@ voice
   .description("List all available public voice profiles with their IDs, descriptions, and supported platforms.")
   .option("--platform <platform>", "Filter by supported platform (x, linkedin, threads, blog, lp)")
   .option("--filter <filter>", "Filter by voice type: 'shallow' or 'deep'")
+  .option("--json", "Output raw JSON")
   .action((options) =>
     voiceListCommand({
       platform: options.platform,
       filter: options.filter,
+      json: options.json,
     })
   );
 
@@ -714,7 +725,8 @@ const domains = program
 domains
   .command("list")
   .description("List all custom domains configured for the active brand.")
-  .action(domainsListCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => domainsListCommand(opts));
 
 domains
   .command("verify <domain>")
@@ -732,7 +744,8 @@ const weekly = program
 weekly
   .command("get")
   .description("Show the current weekly schedule (or suggested defaults if unset).")
-  .action(weeklyScheduleGetCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => weeklyScheduleGetCommand(opts));
 
 weekly
   .command("set")
@@ -850,12 +863,13 @@ program
 program
   .command("me")
   .description("Show the active session (user, key scope, credits, free-tier remaining, brands).")
-  .action(meCommand);
+  .option("--json", "Output raw JSON")
+  .action((opts) => meCommand(opts));
 
 // ─── keys ────────────────────────────────────────────────────────────────────
 const keys = program.command("keys").description("Manage API keys.");
 
-keys.command("list").description("List all API keys on your account.").action(keysListCommand);
+keys.command("list").description("List all API keys on your account.").option("--json", "Output raw JSON").action((opts) => keysListCommand(opts));
 
 keys
   .command("create")
@@ -876,6 +890,7 @@ blogs
   .command("list")
   .description("List publications and articles for the active brand.")
   .option("--status <status>", "Filter articles by status (draft, published)")
+  .option("--json", "Output raw JSON")
   .action((opts) => blogsListCommand(opts));
 
 blogs
@@ -900,7 +915,8 @@ blogs
 blogs
   .command("status <articleId>")
   .description("Show the live generation status of an article.")
-  .action((id) => blogsStatusCommand(id));
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => blogsStatusCommand(id, opts));
 
 blogs
   .command("publish <articleId>")
@@ -911,7 +927,8 @@ blogs
 blogs
   .command("view <articleId>")
   .description("View full article content.")
-  .action((id) => blogsViewCommand(id));
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => blogsViewCommand(id, opts));
 
 blogs
   .command("delete <articleId>")
@@ -925,11 +942,12 @@ jobs
   .description("List active and recent jobs for the active brand.")
   .option("--status <status>", "Filter (running, completed, failed, …)")
   .option("--limit <n>", "Max rows (default 50)")
+  .option("--json", "Output raw JSON")
   .action((opts) => jobsListCommand(opts));
 
 // ─── publications / authors / categories ─────────────────────────────────────
 const publications = program.command("publications").description("Manage blog publications.");
-publications.command("list").action(publicationsListCommand);
+publications.command("list").option("--json", "Output raw JSON").action((opts) => publicationsListCommand(opts));
 publications
   .command("create")
   .requiredOption("--title <title>")
@@ -937,7 +955,7 @@ publications
   .action((opts) => publicationsCreateCommand(opts));
 
 const authors = program.command("authors").description("Manage blog authors.");
-authors.command("list").action(authorsListCommand);
+authors.command("list").option("--json", "Output raw JSON").action((opts) => authorsListCommand(opts));
 authors
   .command("create")
   .requiredOption("--first-name <name>")
@@ -953,6 +971,7 @@ const categories = program.command("categories").description("Manage blog catego
 categories
   .command("list")
   .requiredOption("--publication <id>")
+  .option("--json", "Output raw JSON")
   .action((opts) => categoriesListCommand(opts));
 categories
   .command("create")
@@ -965,7 +984,7 @@ categories
 // ─── landing pages ───────────────────────────────────────────────────────────
 const lp = program.command("lp").description("Manage landing pages.");
 
-lp.command("list").action(lpListCommand);
+lp.command("list").option("--json", "Output raw JSON").action((opts) => lpListCommand(opts));
 lp
   .command("generate")
   .description("Generate a new landing page (deducts credits).")
@@ -986,7 +1005,8 @@ lp
 lp
   .command("view <slug>")
   .description("View landing page content and status.")
-  .action((slug) => lpViewCommand(slug));
+  .option("--json", "Output raw JSON")
+  .action((slug, opts) => lpViewCommand(slug, opts));
 lp
   .command("delete <slug>")
   .description("Permanently delete a landing page.")

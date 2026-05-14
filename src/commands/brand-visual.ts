@@ -16,7 +16,8 @@ import fs from "fs";
 import path from "path";
 import { extractApiError } from "../api-error";
 import { createClient } from "../client";
-import { getBrandId } from "../config";
+import { getApiUrl, getBrandId } from "../config";
+import { printWebUrl } from "../output";
 
 interface BrandVisualSetOptions {
   logo?: string;
@@ -121,6 +122,7 @@ export async function brandVisualSetCommand(
     console.log("\nNext step:  pking brand visual import-assets --urls <csv>");
     console.log("Then:       pking brand smart-week [brandId] --yes");
     console.log("Finally:    pking brand finalize [brandId]");
+    printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}/visual-identity` });
   } catch (err) {
     console.error(`\nERROR: ${extractApiError(err)}`);
     process.exit(1);

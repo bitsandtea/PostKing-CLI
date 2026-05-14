@@ -11,7 +11,7 @@ interface SocialAccount {
   accountAvatar?: string;
 }
 
-export async function socialCheckCommand(): Promise<void> {
+export async function socialCheckCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -23,6 +23,7 @@ export async function socialCheckCommand(): Promise<void> {
 
   try {
     const res = await client.get(`/api/brands/${brandId}/social-accounts`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const accounts: SocialAccount[] = res.data.accounts || res.data || [];
 
     if (!Array.isArray(accounts) || accounts.length === 0) {

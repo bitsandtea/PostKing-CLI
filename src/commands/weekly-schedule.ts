@@ -103,12 +103,13 @@ function formatDayConfigs(cfgs: DayConfig[]): string {
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
-export async function weeklyScheduleGetCommand(): Promise<void> {
+export async function weeklyScheduleGetCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
 
   try {
     const res = await client.get(`/api/brands/${brandId}/weekly-schedule`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const { schedule, defaults } = res.data as GetResponse;
 
     console.log(`\n📆 WEEKLY SCHEDULE — brand ${brandId}\n`);

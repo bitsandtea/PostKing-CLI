@@ -11,11 +11,12 @@ function requireBrand(): string {
   return brandId;
 }
 
-export async function authorsListCommand(): Promise<void> {
+export async function authorsListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/authors`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const authors = res.data.authors ?? res.data ?? [];
     console.log(`\nAuthors (${authors.length}):`);
     authors.forEach(
@@ -50,13 +51,14 @@ export async function authorsCreateCommand(options: {
   }
 }
 
-export async function categoriesListCommand(options: { publication: string }): Promise<void> {
+export async function categoriesListCommand(options: { publication: string; json?: boolean }): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(
       `/api/agent/v1/brands/${brandId}/blogs/${options.publication}/categories`
     );
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const categories = res.data.categories ?? res.data ?? [];
     console.log(`\nCategories (${categories.length}):`);
     categories.forEach((c: { id: string; name: string; slug: string }) =>

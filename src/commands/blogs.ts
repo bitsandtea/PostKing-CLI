@@ -12,11 +12,12 @@ function requireBrand(): string {
   return brandId;
 }
 
-export async function blogsListCommand(options: { status?: string }): Promise<void> {
+export async function blogsListCommand(options: { status?: string; json?: boolean }): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const publications = res.data.publications ?? [];
     const articles = (res.data.blogs ?? res.data.articles ?? []).filter((a: { status: string }) =>
       options.status ? a.status === options.status : true
@@ -29,6 +30,7 @@ export async function blogsListCommand(options: { status?: string }): Promise<vo
     articles.forEach((a: { id: string; postTitle?: string; title?: string; status: string }) =>
       console.log(`  ${a.id}  [${a.status}]  ${a.postTitle ?? a.title ?? ""}`)
     );
+    printWebUrl(res.data);
   } catch (err) {
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
@@ -154,11 +156,13 @@ async function pollBlogStatus(
   return { completed: false, lastStatus };
 }
 
-export async function blogsStatusCommand(blogId: string): Promise<void> {
+export async function blogsStatusCommand(blogId: string, options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
-    const op = await fetchBlogStatus(client, brandId, blogId);
+    const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs/${blogId}/status`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    const op = (res.data?.operationStatus ?? null) as OperationStatus | null;
     if (!op) {
       console.log(`No status recorded for ${blogId}.`);
       return;
@@ -200,17 +204,19 @@ export async function blogsPublishCommand(
   }
 }
 
-export async function blogsViewCommand(articleId: string): Promise<void> {
+export async function blogsViewCommand(articleId: string, options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs/${articleId}`);
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const a = res.data.article ?? res.data;
     console.log(`\n[${a.id}] ${a.postTitle ?? a.title}`);
     console.log(`Status:  ${a.status}`);
     console.log(`Slug:    ${a.postSlug ?? a.slug}`);
     console.log(`Excerpt: ${a.postExcerpt ?? ""}`);
     console.log(`\n${(a.postText ?? "").slice(0, 3000)}`);
+    printWebUrl(res.data);
   } catch (err) {
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);

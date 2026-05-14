@@ -48,16 +48,18 @@ interface LandingPage {
   status?: string;
 }
 
-export async function lpListCommand(): Promise<void> {
+export async function lpListCommand(options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/landing-pages`);
+    if (options.json) { emitJson(res.data); return; }
     const pages: LandingPage[] = res.data.landingPages ?? res.data.pages ?? res.data ?? [];
     console.log(`\nLanding Pages (${pages.length}):`);
     pages.forEach((p) =>
       console.log(`  ${p.slug}  [${p.status ?? "draft"}]  ${p.title ?? ""}`)
     );
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -117,14 +119,16 @@ export async function lpPublishCommand(slug: string): Promise<void> {
   }
 }
 
-export async function lpViewCommand(slug: string): Promise<void> {
+export async function lpViewCommand(slug: string, options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   try {
     const res = await client.get(`/api/agent/v1/landing-pages/${slug}`);
+    if (options.json) { emitJson(res.data); return; }
     const p = res.data.landingPage ?? res.data;
     console.log(`\n[${p.slug}] ${p.title ?? ""}`);
     console.log(`Status: ${p.status}`);
     console.log(`Content: ${(p.content ?? "").slice(0, 2000)}`);
+    printWebUrl(res.data);
   } catch (err) {
     printError(err);
     process.exit(1);
