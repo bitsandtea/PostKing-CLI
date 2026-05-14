@@ -5,7 +5,13 @@ import { loginWithPasswordCommand, meCommand, registerCommand } from "./commands
 import { authorsCreateCommand, authorsListCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
 import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
 import { jobsListCommand } from "./commands/jobs";
-import { brandCreateCommand, brandDeleteCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand, brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand";
+import { brandCreateCommand, brandDeleteCommand, brandFinalizeCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand } from "./commands/brand";
+import { brandMixCommand } from "./commands/brand-mix";
+import { brandMediumsCommand } from "./commands/brand-mediums";
+import { brandSmartWeekCommand } from "./commands/brand-smart-week";
+import { brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand-themes";
+import { brandVisualImportAssetsCommand, brandVisualSetCommand } from "./commands/brand-visual";
+import { brandAudienceEditCommand, brandAudiencePrepromptCommand, brandCrawlProfileCommand } from "./commands/brand-audience";
 import { domainsAddCommand, domainsConnectCommand, domainsDeleteCommand } from "./commands/domains-extra";
 import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
@@ -43,7 +49,7 @@ import { seoCategorizeCommand, seoClustersListCommand, seoClusterCommand, seoCom
 import { socialConnectPlatformCommand } from "./commands/social-extra";
 import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } from "./commands/social";
 import { userCreditsCommand } from "./commands/user";
-import { voiceListCommand, voiceRewriteCommand } from "./commands/voice";
+import { voiceBrandDeleteCommand, voiceBrandListCommand, voiceBrandUpdateCommand, voiceListCommand, voiceRewriteCommand } from "./commands/voice";
 import { trendsListCommand } from "./commands/trends";
 import { runUpdateCheck } from "./update-check";
 import {
@@ -264,13 +270,186 @@ brand
   .action(brandSetCommand);
 
 brand
+  .command("mix [brandId]")
+  .description(
+    "Review and confirm the brand's content intent mix (educate/connect/present/intrigue).\n" +
+    "Runs after 'audience-review' in the brand-setup flow. With no flags, prints the\n" +
+    "current mix and prompts to accept, edit, or reject. Use --set <json> for\n" +
+    "non-interactive overrides and --json to dump the raw payload."
+  )
+  .option("--json", "Print the fetched mix as JSON and exit (no prompt)")
+  .option(
+    "--set <json>",
+    "Non-interactive override. Pass a JSON object like\n" +
+    "  '{\"intentMix\":{\"educate\":30,\"connect\":20,\"present\":35,\"intrigue\":15}}'."
+  )
+  .action((brandId: string | undefined, opts: { json?: boolean; set?: string }) =>
+    brandMixCommand(brandId, opts)
+  );
+
+brand
+  .command("mediums [brandId]")
+  .description(
+    "Pick the social/content channels (mediums) this brand wants to grow on.\n" +
+    "Stored at brandSettings.selectedMediums; consumed by smart-week + weekly\n" +
+    "scheduler. With no flags, prints current selection and prompts for a\n" +
+    "comma-separated list. Use --set for non-interactive runs."
+  )
+  .option("--json", "Print the fetched mediums as JSON and exit (no prompt)")
+  .option(
+    "--set <csv>",
+    "Non-interactive override. Comma-separated list, e.g.\n" +
+    "  --set 'linkedin,x/twitter,instagram,blog'"
+  )
+  .action((brandId: string | undefined, opts: { json?: boolean; set?: string }) =>
+    brandMediumsCommand(brandId, opts)
+  );
+
+brand
+  .command("smart-week [brandId]")
+  .description(
+    "Generate a full week of posts (Mon-Fri) across the brand's selected\n" +
+    "mediums. Asks for explicit consent first; pass --yes to skip the prompt.\n" +
+    "Runs in the background after kickoff — poll progress via 'pking jobs list'."
+  )
+  .option("--yes", "Skip the consent prompt (non-interactive)")
+  .option("--json", "Emit the raw kickoff payload (sessionId + operationId)")
+  .action((brandId: string | undefined, opts: { yes?: boolean; json?: boolean }) =>
+    brandSmartWeekCommand(brandId, opts)
+  );
+
+brand
+  .command("finalize [brandId]")
+  .description(
+    "Mark the brand as fully onboarded (sets brandSettings.isOnboarded = true).\n" +
+    "Mirrors the final PATCH the web onboarding flow issues at the end of\n" +
+    "VisualIdentitySetup. Run this once the full chain is done: onboard ->\n" +
+    "mediums -> mix -> themes -> voice -> visual -> smart-week -> finalize."
+  )
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts: { json?: boolean }) =>
+    brandFinalizeCommand(brandId, opts)
+  );
+
+const brandVisual = brand
+  .command("visual")
+  .description(
+    "Configure the brand's visual identity (logo, colors, fonts) and import\n" +
+    "website assets. Mirrors the web Visual Identity onboarding step."
+  );
+
+brandVisual
+  .command("set [brandId]")
+  .description(
+    "Set logo asset IDs, brand colors, and/or fonts on the brand.\n" +
+    "Every value is a flag — works headless (no prompts).\n" +
+    "Wraps PATCH /api/agent/v1/brands/{brandId} with { brandSettings: {...} }."
+  )
+  .option("--logo <assetId>", "Full logo (light variant). Asset ID returned by 'pking brand visual import-assets' or listed by 'pking visuals list'.")
+  .option("--symbol-light <assetId>", "Icon-only logo for light backgrounds. Asset ID returned by 'pking brand visual import-assets'.")
+  .option("--symbol-dark <assetId>", "Icon-only logo for dark backgrounds. Asset ID returned by 'pking brand visual import-assets'.")
+  .option("--primary-color <hex>", "Primary brand color, e.g. #FF6B35")
+  .option("--secondary-color <hex>", "Secondary brand color")
+  .option("--accent-color <hex>", "Accent color used for buttons/highlights")
+  .option("--primary-font <name>", "Primary font family name")
+  .option("--secondary-font <name>", "Secondary font family name")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts) =>
+    brandVisualSetCommand(brandId, opts)
+  );
+
+brandVisual
+  .command("import-assets [brandId]")
+  .description(
+    "Batch-import image URLs into the brand asset library (max 50).\n" +
+    "Mirrors the importCrawledAssets call from VisualIdentitySetup.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/assets/import-urls."
+  )
+  .option("--urls <csv>", "Comma-separated list of image URLs")
+  .option("--from-file <path>", "Read URLs from a file (one per line, or a JSON array)")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts) =>
+    brandVisualImportAssetsCommand(brandId, opts)
+  );
+
+brand
   .command("create <name>")
-  .description("Manually create a brand without automatic crawling/onboarding.")
+  .description(
+    "Manually create a brand without automatic website crawling.\n" +
+    "After creating, automatically POSTs /api/brands/{brandId}/finalize to\n" +
+    "kick off audience-data + theme generation — mirrors the web flow.\n" +
+    "Pass --skip-finalize to create the brand row only (debug/testing)."
+  )
   .option("--description <desc>", "Optional brand description")
   .option("--website <url>", "Optional website URL")
   .option("--tone <tone>", "Initial tone description")
   .option("--audience <audience>", "Target audience description")
-  .action((name: string, options: { description?: string, website?: string, tone?: string, audience?: string }) => brandCreateCommand(name, options));
+  .option("--brand-type <type>", "Brand type: personal | business (default business)")
+  .option("--skip-finalize", "Do not chain /finalize after creation (leaves audience-review empty)")
+  .option("--json", "Emit raw JSON payload")
+  .action((name: string, options: { description?: string; website?: string; tone?: string; audience?: string; brandType?: string; skipFinalize?: boolean; json?: boolean }) => brandCreateCommand(name, options));
+
+// ─── brand crawl-profile ─────────────────────────────────────────────────────
+brand
+  .command("crawl-profile [brandId]")
+  .description(
+    "Queue the 'best profile' crawl for a brand. Mirrors the web onboarding\n" +
+    "BestProfileStep — captures a public handle/URL on x/linkedin/threads and\n" +
+    "(optionally) consents to use the posts for tone, not just topic seeding.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/crawl-profile. Headless."
+  )
+  .requiredOption("--platform <platform>", "Source platform: x | linkedin | threads")
+  .requiredOption("--handle <id>", "Public handle (e.g. @yourname) or full profile URL")
+  .option("--profile-type <type>", "personal | brand | mix (default personal)")
+  .option("--tone-consent", "Consent to use the crawled posts for tone, not just topics")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts: { platform: string; handle: string; profileType?: string; toneConsent?: boolean; json?: boolean }) =>
+    brandCrawlProfileCommand(brandId, opts)
+  );
+
+// ─── brand audience (ai-edit + preprompt) ────────────────────────────────────
+const brandAudience = brand
+  .command("audience")
+  .description(
+    "Inspect and AI-edit the brand's audience-review data. Mirrors the web\n" +
+    "audience-review page at /dashboard/brands/{brandId}/audience-review."
+  );
+
+brandAudience
+  .command("edit [brandId]")
+  .description(
+    "AI vibe-edit the audience profile via the inner ai-edit pipeline.\n" +
+    "If --sections is omitted, runs the preprompt analyzer first to auto-pick\n" +
+    "which sections/subsections the instructions should touch (mirrors web).\n" +
+    "Async — returns an operationId. Pass --wait to block until completion.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/audience-review/ai-edit."
+  )
+  .requiredOption("--instructions <text>", "Free-text edit instructions (the 'vibe' prompt)")
+  .option("--sections <csv>", "Comma-separated section keys to edit (skips preprompt)")
+  .option(
+    "--subsections <spec>",
+    "Per-section subfields. Format: 'section:sub1,sub2|section2:sub3'."
+  )
+  .option("--wait", "Block and poll until the edit completes (or --timeout elapses)")
+  .option("--timeout <seconds>", "Max seconds to wait when --wait is set (default 180)", "180")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts: { instructions: string; sections?: string; subsections?: string; wait?: boolean; timeout?: string; json?: boolean }) =>
+    brandAudienceEditCommand(brandId, opts)
+  );
+
+brandAudience
+  .command("preprompt [brandId]")
+  .description(
+    "Run only the preprompt analyzer. Returns which audience sections /\n" +
+    "subsections a free-text instruction would touch — useful for previewing\n" +
+    "before kicking off the heavy ai-edit. Synchronous.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/audience-review/ai-edit/preprompt."
+  )
+  .requiredOption("--instructions <text>", "Free-text edit instructions to analyse")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts: { instructions: string; json?: boolean }) =>
+    brandAudiencePrepromptCommand(brandId, opts)
+  );
 
 brand
   .command("delete <brandId>")
@@ -285,7 +464,11 @@ program
   .command("onboard <websiteUrl>")
   .description("Quickly onboard a new brand by crawling its website and generating initial themes.")
   .option("--name <name>", "Optional custom name for the brand.")
-  .action((url: string, options: { name?: string }) => brandOnboardCommand(url, options))
+  .option("--description <desc>", "Optional brand description (passed through to /api/brands).")
+  .option("--tone <tone>", "Initial tone description (passed through).")
+  .option("--audience <audience>", "Target audience description (passed through).")
+  .option("--brand-type <type>", "Brand type: personal | business (default business).")
+  .action((url: string, options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string }) => brandOnboardCommand(url, options))
   .addHelpText('after', `
 Example:
   $ pking onboard https://postking.app --name "PostKing Agent"
@@ -433,6 +616,57 @@ voice
       platform: options.platform,
       filter: options.filter,
     })
+  );
+
+const voiceBrand = voice
+  .command("brand")
+  .description(
+    "Brand-scoped voice profile management. Wraps the agent v1\n" +
+    "/api/agent/v1/brands/{brandId}/voice-profiles endpoints. Voice profile\n" +
+    "CREATION runs through the async extract endpoints (X, LinkedIn, Threads,\n" +
+    "URLs) and is web-only today — see the dashboard's /voice-profiles page."
+  );
+
+voiceBrand
+  .command("list [brandId]")
+  .description(
+    "List voice profiles attached to a brand. By default shows brand-owned\n" +
+    "profiles only; pass --include-public to also show the public catalog.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/voice-profiles."
+  )
+  .option("--include-public", "Also include public voice profiles available to this brand")
+  .option("--json", "Emit raw JSON payload")
+  .action((brandId: string | undefined, opts: { includePublic?: boolean; json?: boolean }) =>
+    voiceBrandListCommand(brandId, opts)
+  );
+
+voiceBrand
+  .command("update <voiceProfileId>")
+  .description(
+    "Update a brand-owned voice profile (name, active state, Modal adapter).\n" +
+    "Wraps PATCH /api/agent/v1/brands/{brandId}/voice-profiles/{voiceProfileId}."
+  )
+  .option("--brand <brandId>", "Brand id (defaults to active brand)")
+  .option("--name <text>", "New display name")
+  .option("--active", "Mark the profile active")
+  .option("--inactive", "Mark the profile inactive")
+  .option("--adapter <modalAdapterId>", "Set the Modal LoRA adapter id (promotes the profile to deep voice)")
+  .option("--json", "Emit raw JSON payload")
+  .action((voiceProfileId: string, opts: { brand?: string; name?: string; active?: boolean; inactive?: boolean; adapter?: string; json?: boolean }) =>
+    voiceBrandUpdateCommand(voiceProfileId, opts.brand, opts)
+  );
+
+voiceBrand
+  .command("delete <voiceProfileId>")
+  .description(
+    "Delete a brand-owned voice profile. --destructive is required to confirm.\n" +
+    "Wraps DELETE /api/agent/v1/brands/{brandId}/voice-profiles/{voiceProfileId}."
+  )
+  .option("--brand <brandId>", "Brand id (defaults to active brand)")
+  .option("--destructive", "Required confirmation flag")
+  .option("--json", "Emit raw JSON payload")
+  .action((voiceProfileId: string, opts: { brand?: string; destructive?: boolean; json?: boolean }) =>
+    voiceBrandDeleteCommand(voiceProfileId, opts.brand, opts)
   );
 
 voice

@@ -324,8 +324,9 @@ export async function brandInfoCommand(): Promise<void> {
     console.log("  pking visuals options <postId>        (pick imagery for a post)");
     console.log("  pking visuals carousel <postId>");
     console.log("");
-    console.log("Audience & themes");
+    console.log("Audience, mix & themes");
     console.log("  pking brand info                       (re-run this reveal)");
+    console.log("  pking brand mix                        (review/confirm intent mix — runs after audience-review)");
     console.log("  pking brand themes list");
     console.log("  pking brand themes edit <themeId>");
     console.log("  pking brand generate-themes --count 5");
@@ -347,194 +348,27 @@ export async function brandInfoCommand(): Promise<void> {
   }
 }
 
-export async function brandThemesCommand(): Promise<void> {
-  const client = createClient();
-  const brandId = getBrandId();
-
-  if (!brandId) {
-    console.error("ERROR: No active brand set.");
-    process.exit(1);
-  }
-
-  try {
-    const res = await client.get("/api/brands?include=themes");
-    const brands: Brand[] = res.data.brands || [];
-    const brand = brands.find(b => b.id === brandId);
-
-    if (!brand || !brand.themes) {
-      console.log("No themes found for this brand.");
-      return;
-    }
-
-    console.log(`\n📖 CONTENT THEMES FOR: ${brand.name.toUpperCase()}\n`);
-    brand.themes.forEach((t, i) => {
-      console.log(`${i + 1}. [${t.id}] ${t.title.toUpperCase()} [${t.intent || "general"}]`);
-      console.log(`   ${t.content}\n`);
-    });
-  } catch (err: unknown) {
-    process.exit(1);
-  }
-}
-
-export async function brandThemesEditCommand(themeId: string, options: { title?: string; content?: string }): Promise<void> {
-  const client = createClient();
-  const brandId = getBrandId();
-
-  if (!brandId) {
-    console.error("ERROR: No active brand set.");
-    process.exit(1);
-  }
-
-  console.log(`\n✍️ Updating theme ${themeId}...`);
-
-  try {
-    await client.put(`/api/brands/${brandId}/themes/${themeId}`, options);
-    console.log("✅ Theme updated successfully.\n");
-  } catch (err: any) {
-    console.error(`❌ ERROR: ${extractApiError(err)}`);
-    process.exit(1);
-  }
-}
-
-export async function brandThemesDeleteCommand(themeId: string): Promise<void> {
-  const client = createClient();
-  const brandId = getBrandId();
-
-  if (!brandId) {
-    console.error("ERROR: No active brand set.");
-    process.exit(1);
-  }
-
-  console.log(`\n🗑 Deleting theme ${themeId}...`);
-
-  try {
-    await client.delete(`/api/brands/${brandId}/themes/${themeId}`);
-    console.log("✅ Theme deleted successfully.\n");
-  } catch (err: any) {
-    console.error(`❌ ERROR: ${extractApiError(err)}`);
-    process.exit(1);
-  }
-}
-
-export async function brandThemesGenerateCommand(options: { count?: string; instructions?: string; input?: string }): Promise<void> {
-  const client = createClient();
-  const brandId = getBrandId();
-
-  if (!brandId) {
-    console.error("ERROR: No active brand set.");
-    process.exit(1);
-  }
-
-  let inputData = options.input;
-  if (inputData && inputData.startsWith("/")) {
-    try {
-      const fs = await import("fs");
-      inputData = fs.readFileSync(inputData, "utf8");
-    } catch (e) {
-      console.warn("⚠️ Could not read input file, treating as literal string.");
-    }
-  }
-
-  let count = parseInt(options.count || "5", 10);
-  if (count > 10) {
-    console.warn(`⚠️ Maximum 10 themes can be generated at once. Adjusted count from ${count} to 10.`);
-    count = 10;
-  }
-  console.log(`\n🛠  Requesting generation of ${count} new themes...`);
-
-  try {
-    // 1. Snapshot existing themes
-    const initialRes = await client.get("/api/brands?include=themes");
-    const initialBrand = (initialRes.data.brands || []).find((b: Brand) => b.id === brandId);
-    const existingThemeIds = new Set(initialBrand?.themes?.map((t: any) => t.id) || []);
-
-    // 2. Start generation
-    const genRes = await client.post(`/api/brands/${brandId}/themes/generate/async`, {
-      count,
-      instructions: options.instructions,
-      input: inputData
-    });
-
-    const { cost, remainingCredits, operationId: targetOperationId } = genRes.data;
-    console.log(`✅ Request accepted! Cost: ${cost} credits | Balance: ${remainingCredits}`);
-    console.log("Polling for completion...");
-
-    let isReady = false;
-    let attempts = 0;
-    const maxAttempts = 60; // 5 mins
-
-    // Wait a brief moment before first poll to let DB update
-    await new Promise(r => setTimeout(r, 2000));
-
-    while (!isReady && attempts < maxAttempts) {
-      attempts++;
-      
-      const statusRes = await client.get(`/api/agent/v1/brands/${brandId}/status`);
-      const { status, phase, themesCount, operationId: currentOperationId } = statusRes.data;
-
-      process.stdout.write(`\r[Attempt ${attempts}] Status: ${status} | Phase: ${phase} | Themes: ${themesCount}   `);
-
-      // ONLY proceed if the status is "completed" AND for our target operation
-      const isCorrectLegacyOp = !targetOperationId && status === "completed";
-      const isTargetOpFinished = targetOperationId && status === "completed" && currentOperationId === targetOperationId;
-
-      if (isTargetOpFinished || isCorrectLegacyOp) {
-        isReady = true;
-        console.log(`\n\n🎉 SUCCESS: Theme generation complete!`);
-        console.log(`Total themes now available: ${themesCount}\n`);
-        
-        // Fetch full themes list to find new ones
-        const finalRes = await client.get("/api/brands?include=themes");
-        const finalBrand = (finalRes.data.brands || []).find((b: Brand) => b.id === brandId);
-        
-        // Find new themes by comparing against original snapshot
-        const newThemes = finalBrand?.themes?.filter((t: any) => !existingThemeIds.has(t.id)) || [];
-        
-        if (newThemes.length > 0) {
-          console.log(`🆕 NEWLY GENERATED THEMES (${newThemes.length}):\n`);
-          newThemes.forEach((t: any, i: number) => {
-            console.log(`${i + 1}. [${t.id}] ${t.title.toUpperCase()} [${t.intent || "general"}]`);
-            console.log(`   ${t.content}\n`);
-          });
-        } else {
-          console.log("No new themes were detected in this batch.");
-        }
-        
-        break;
-      }
-
-      if (status === "failed" || status === "error") {
-        console.error(`\n\nERROR: Generation failed at phase: ${phase}`);
-        process.exit(1);
-      }
-
-      await new Promise(r => setTimeout(r, 5000));
-    }
-
-    if (!isReady) {
-      console.log("\n\nStill processing. Check back later with 'pking brand themes'");
-    }
-
-  } catch (err: any) {
-    console.error(`\n\n❌ ERROR: ${extractApiError(err)}`);
-    process.exit(1);
-  }
-}
-
 export function brandSetCommand(brandId: string): void {
   setConfig({ brandId });
   console.log(`SUCCESS: Active brand set to: ${brandId}`);
   console.log("All subsequent commands will use this brand workspace.");
 }
 
-export async function brandOnboardCommand(websiteUrl: string, options: { name?: string }): Promise<void> {
+export async function brandOnboardCommand(
+  websiteUrl: string,
+  options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string }
+): Promise<void> {
   const client = createClient();
   console.log(`\n🚀 TO_AGENT: Starting brand onboarding for ${websiteUrl}...`);
 
   try {
     const onboardRes = await client.post("/api/agent/v1/brands/onboard", {
       websiteUrl,
-      name: options.name
+      name: options.name,
+      description: options.description,
+      tone: options.tone,
+      audience: options.audience,
+      brandType: options.brandType,
     });
 
     const { brandId } = onboardRes.data;
@@ -557,7 +391,7 @@ export async function brandOnboardCommand(websiteUrl: string, options: { name?: 
       if (ready || status === "completed") {
         isReady = true;
         console.log(`\n\n🎉 SUCCESS: Brand '${name}' is fully onboarded!`);
-        
+
         // Auto-set as active brand
         setConfig({ brandId });
         console.log(`Brand ${brandId} is now set as your active workspace.`);
@@ -567,7 +401,13 @@ export async function brandOnboardCommand(websiteUrl: string, options: { name?: 
         const reveal = await fetchBrandReveal(client, brandId);
         if (reveal) {
           displayBrandProfile(reveal);
-          console.log("Next: review the content themes with 'pking brand themes', then connect a social account with 'pking social check'.\n");
+          console.log(`Next step:  pking brand mediums ${brandId}    (pick channels to grow on)`);
+          console.log(`Then:       pking brand mix ${brandId}        (review + confirm your content intent mix)`);
+          console.log("Then:       pking brand themes                 (review content themes)");
+          console.log("Then:       pking voice brand list             (review voice profiles — optional)");
+          console.log("Then:       pking brand visual set --primary-color <hex> --logo <url>");
+          console.log("Then:       pking brand smart-week             (generate this week's content — asks first)");
+          console.log("Finally:    pking brand finalize               (mark onboarding complete)\n");
         } else {
           console.log("Next: run 'pking brand info' in a minute to see the full audience analysis.\n");
         }
@@ -666,29 +506,136 @@ export async function brandDeleteCommand(
   }
 }
 
-export async function brandCreateCommand(name: string, options: { description?: string, website?: string, tone?: string, audience?: string }): Promise<void> {
-  const client = createClient();
-  console.log(`\n🛠  Creating brand '${name}'...`);
+// ─── Finalize ────────────────────────────────────────────────────────────────
+// Mirrors the final PATCH the web onboarding issues at the end of
+// VisualIdentitySetup. Sets brandSettings.isOnboarded = true, which the web
+// app also uses to gate the "onboarded" notification and dashboard banners.
 
+export async function brandFinalizeCommand(
+  brandIdArg: string | undefined,
+  options: { json?: boolean }
+): Promise<void> {
+  const client = createClient();
+  const brandId = brandIdArg || getBrandId();
+  if (!brandId) {
+    console.error(
+      "ERROR: No brand id supplied and no active brand set. Pass <brandId> or run 'pking brand set <brandId>'."
+    );
+    process.exit(1);
+  }
+
+  try {
+    const res = await client.post(
+      `/api/agent/v1/brands/${brandId}/finalize`,
+      {}
+    );
+    if (options.json) {
+      console.log(JSON.stringify(res.data, null, 2));
+      return;
+    }
+    console.log(`SUCCESS: Brand ${brandId} marked as fully onboarded.`);
+    console.log("");
+    console.log("That's the full chain done:");
+    console.log("  onboard -> mediums -> mix -> themes -> voice -> visual -> smart-week -> finalize");
+    console.log("");
+    console.log("If you haven't yet, generate your first week of content:");
+    console.log(`  pking brand smart-week ${brandId}`);
+    console.log("");
+  } catch (err: unknown) {
+    console.error(`\nERROR: ${extractApiError(err)}`);
+    process.exit(1);
+  }
+}
+
+function cleanOptional(v?: string): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const trimmed = v.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}
+
+export async function brandCreateCommand(
+  name: string,
+  options: { description?: string; website?: string; tone?: string; audience?: string; brandType?: string; skipFinalize?: boolean; json?: boolean }
+): Promise<void> {
+  const client = createClient();
+  if (!options.json) console.log(`\n🛠  Creating brand '${name}'...`);
+
+  let brandId: string;
   try {
     const res = await client.post("/api/brands", {
       name,
-      description: options.description,
-      websiteUrl: options.website,
-      tone: options.tone,
-      audience: options.audience
+      description: cleanOptional(options.description),
+      websiteUrl: cleanOptional(options.website),
+      tone: cleanOptional(options.tone),
+      audience: cleanOptional(options.audience),
+      brandType: cleanOptional(options.brandType),
     });
-
     const brand = res.data.brand;
-    console.log(`✅ SUCCESS: Brand created! ID: ${brand.id}`);
-    
-    // Auto-set as active brand
-    setConfig({ brandId: brand.id });
-    console.log(`Brand ${brand.id} is now set as your active workspace.`);
-    console.log("\nNext step: Run 'pking brand info' to see the profile or 'pking social check' to connect accounts.");
-
-  } catch (err: any) {
+    brandId = brand.id;
+    setConfig({ brandId });
+    if (!options.json) {
+      console.log(`✅ SUCCESS: Brand created! ID: ${brandId}`);
+      console.log(`Brand ${brandId} is now set as your active workspace.`);
+    }
+  } catch (err: unknown) {
     console.error(`\n\nERROR: ${extractApiError(err)}`);
     process.exit(1);
+  }
+
+  // Chain the inner /finalize route — this triggers audience-data generation
+  // for manual brands (no websiteUrl) and theme auto-generation. The web
+  // flow always chains this; the CLI used to skip it, leaving audience-review
+  // empty for manual brands.
+  if (options.skipFinalize) {
+    if (options.json) {
+      console.log(
+        JSON.stringify({ brandId, finalized: false, finalizeStatus: "skipped" }, null, 2)
+      );
+    } else {
+      console.log("\nSkipped audience-review kickoff (--skip-finalize). Next:");
+      console.log(`  pking brand info`);
+    }
+    return;
+  }
+
+  try {
+    const fin = await client.post(`/api/brands/${brandId}/finalize`, {});
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          { brandId, finalized: true, finalizeStatus: "ok", finalize: fin.data },
+          null,
+          2
+        )
+      );
+      return;
+    }
+    console.log("\n🚀 Audience analysis + theme generation kicked off in background.");
+    if (fin.data?.operationId) console.log(`Operation: ${fin.data.operationId}`);
+    console.log("\nNext step: poll progress with 'pking jobs list' or 'pking brand info'.");
+    console.log("Once ready:  pking brand mediums -> mix -> visual -> smart-week -> finalize");
+  } catch (err: unknown) {
+    // Brand row was created successfully — do NOT exit non-zero, or an
+    // orchestrator (Hermes/OpenClaw) will retry and create a duplicate brand.
+    // Surface a clear warning and the retry path instead.
+    const errMsg = extractApiError(err);
+    if (options.json) {
+      console.log(
+        JSON.stringify(
+          { brandId, finalized: false, finalizeStatus: "failed", error: errMsg },
+          null,
+          2
+        )
+      );
+      return;
+    }
+    console.warn(
+      `\nWARNING: Brand ${brandId} was created, but /finalize failed: ${errMsg}`
+    );
+    console.warn("The brand exists and is set as your active workspace, but");
+    console.warn("audience-review + theme generation did NOT kick off. To retry:");
+    console.warn(`  pking brand info                   (check current state)`);
+    console.warn(`  pking brand crawl-profile ${brandId} ...   (if the website crawl is missing)`);
+    console.warn(`  or re-POST /api/brands/${brandId}/finalize from the dashboard.`);
   }
 }
