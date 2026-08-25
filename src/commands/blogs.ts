@@ -1,7 +1,8 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
-import { extractApiError } from "../api-error";
+import { extractApiError, printLanguageGateError } from "../api-error";
+import { validateLanguageFlag } from "../constants";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -18,18 +19,23 @@ export async function blogsListCommand(options: { status?: string; json?: boolea
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs`);
     if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-    const publications = res.data.publications ?? [];
+    const publications: Array<{ id: string; title: string; languageCode?: string | null }> = res.data.publications ?? [];
     const articles = (res.data.blogs ?? res.data.articles ?? []).filter((a: { status: string }) =>
       options.status ? a.status === options.status : true
     );
+    // BlogArticle has no languageCode column of its own — it inherits from its
+    // parent publication via blogId. Look it up here rather than defaulting to
+    // "en", so a pre-multilingual article (no parent match) prints honestly.
+    const languageByPublicationId = new Map(publications.map((p) => [p.id, p.languageCode ?? null]));
     console.log(`\nPublications (${publications.length}):`);
-    publications.forEach((p: { id: string; title: string }) =>
-      console.log(`  ${p.id}  ${p.title}`)
+    publications.forEach((p) =>
+      console.log(`  ${p.id}  [${p.languageCode ?? "unset"}]  ${p.title}`)
     );
     console.log(`\nArticles (${articles.length}):`);
-    articles.forEach((a: { id: string; postTitle?: string; title?: string; status: string }) =>
-      console.log(`  ${a.id}  [${a.status}]  ${a.postTitle ?? a.title ?? ""}`)
-    );
+    articles.forEach((a: { id: string; postTitle?: string; title?: string; status: string; blogId?: string }) => {
+      const language = a.blogId ? languageByPublicationId.get(a.blogId) ?? null : null;
+      console.log(`  ${a.id}  [${a.status}]  [${language ?? "unset"}]  ${a.postTitle ?? a.title ?? ""}`);
+    });
     printWebUrl(res.data);
   } catch (err) {
     console.error(`ERROR: ${extractApiError(err)}`);
@@ -40,16 +46,24 @@ export async function blogsListCommand(options: { status?: string; json?: boolea
 export async function blogsCreateCommand(options: {
   title: string;
   description?: string;
+  languageCode?: string;
 }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const languageCode = validateLanguageFlag(options.languageCode);
   const client = createClient();
   const brandId = requireBrand();
   try {
     const res = await client.post(`/api/agent/v1/brands/${brandId}/blogs`, {
       title: options.title,
       description: options.description,
+      languageCode,
     });
-    console.log(`SUCCESS: Publication created. ID: ${res.data.id}`);
+    const blog = res.data.blog ?? res.data;
+    console.log(`SUCCESS: Publication created. ID: ${blog?.id ?? blog?.blogId ?? res.data.id}`);
+    if (blog?.languageCode) console.log(`Language: ${blog.languageCode}`);
   } catch (err) {
+    if (printLanguageGateError(err, languageCode)) process.exit(1);
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
@@ -63,7 +77,11 @@ export async function blogsGenerateCommand(options: {
   keywords?: string;
   wait?: boolean;
   timeout?: string;
+  language?: string;
 }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = requireBrand();
   try {
@@ -74,12 +92,13 @@ export async function blogsGenerateCommand(options: {
         voiceProfileId: options.voice,
         targetLength: options.length ?? "medium",
         primaryKeywords: options.keywords ? options.keywords.split(",").map((s) => s.trim()) : undefined,
+        language,
       }
     );
     const data = res.data ?? {};
-    const article = data.article ?? data;
-    const id = article?.id ?? data.blogId;
-    const title = article?.postTitle ?? article?.title;
+    const blog = data.blog ?? data.article ?? null;
+    const id = blog?.id ?? blog?.blogId ?? data.blogId ?? data.id;
+    const title = blog?.postTitle ?? blog?.title ?? data.postTitle ?? data.title;
     console.log(`SUCCESS: Article generation started. ID: ${id ?? "(unknown)"}`);
     if (title) console.log(`Title: ${title}`);
     const statusUrl = id ? `/api/agent/v1/brands/${brandId}/blogs/${id}/status` : null;
@@ -210,10 +229,13 @@ export async function blogsViewCommand(articleId: string, options: { json?: bool
   try {
     const res = await client.get(`/api/agent/v1/brands/${brandId}/blogs/${articleId}`);
     if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
-    const a = res.data.article ?? res.data;
+    const a = res.data.blog ?? res.data.article ?? res.data;
     console.log(`\n[${a.id}] ${a.postTitle ?? a.title}`);
     console.log(`Status:  ${a.status}`);
-    console.log(`Slug:    ${a.postSlug ?? a.slug}`);
+    // languageCode is inherited from the parent publication and can be null
+    // for a pre-multilingual publication — render that honestly, not "en".
+    console.log(`Language: ${a.languageCode ?? "(unset — pre-multilingual publication)"}`);
+    console.log(`Slug:    ${a.postSlug ?? a.slug ?? a.postUrl ?? "(none)"}`);
     console.log(`Excerpt: ${a.postExcerpt ?? ""}`);
     console.log(`\n${(a.postText ?? "").slice(0, 3000)}`);
     printWebUrl(res.data);

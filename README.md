@@ -140,6 +140,47 @@ pking brand generate-themes --count 5 --input /path/to/brand-notes.txt
 pking brand generate-themes --count 3 --input "We help remote teams stay aligned through async video updates"
 ```
 
+### `pking brand language`
+Read or set the brand's **content language** — the language every generator writes in by default. Stored at `brandSettings.contentLanguage`. Supported codes: `en`, `es`, `pt-BR`, `de`, `fr`, `cs` (BCP-47 casing — it is `pt-BR`, never `pt`).
+
+Changing it affects **new generations only**; nothing already generated is translated, and SEO markets keep whatever language they were pulled for.
+
+```bash
+# Show the current language plus the supported set (prompts for a new code)
+pking brand language
+
+# Non-interactive set
+pking brand language --set cs
+
+# A specific brand, raw JSON
+pking brand language cmp6ur... --json
+```
+
+---
+
+## Content language (`--language`)
+
+Every generation command takes an optional `--language <code>` to override the brand's content language **for that one call**:
+
+```bash
+pking posts generate --platform linkedin --language cs
+pking posts generate-bulk --platform x --language de --days 14
+pking blogs generate --publication <id> --topic "Async standups" --language pt-BR
+pking lp generate --topic "Pricing" --language fr
+pking brand smart-week --language es --yes
+pking repurpose --source-type url --source-url https://example.com/post --target-type social --language de
+pking editor rewrite --text "..." --language cs
+```
+
+Omitting the flag is **not** the same as passing `--language en`: an omitted flag leaves the field out of the request entirely, so the server falls back to the brand's configured language. An unknown or unsupported code (including regional variants the platform doesn't carry, like `pt-PT`) is rejected locally before any request is sent:
+
+```
+$ pking posts generate --platform x --language cz
+ERROR: --language must be one of: en, es, pt-BR, de, fr, cs (got "cz")
+```
+
+To change the default for every future generation instead, use `pking brand language --set <code>`.
+
 ---
 
 ## Posts (`pking posts`)

@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { extractApiError } from "../api-error";
+import { validateLanguageFlag } from "../constants";
 
 interface RepurposeCommandOptions {
   sourceType: string;
@@ -17,9 +18,13 @@ interface RepurposeCommandOptions {
   includeLink?: boolean;
   themeId?: string;
   voice?: string;
+  language?: string;
 }
 
 export async function repurposeCommand(options: RepurposeCommandOptions): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = getBrandId();
 
@@ -48,6 +53,9 @@ export async function repurposeCommand(options: RepurposeCommandOptions): Promis
   if (options.angle) payload.angle = options.angle;
   if (options.themeId) payload.themeId = options.themeId;
   if (options.includeLink) payload.includeLink = true;
+  // Only set when the flag was actually passed — an absent key means "use the
+  // brand's content language", which is not the same as an explicit "en".
+  if (language) payload.language = language;
 
   if (options.textLength) {
     if (options.textLength.startsWith("custom:")) {

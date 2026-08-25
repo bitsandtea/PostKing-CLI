@@ -2,11 +2,28 @@ import { createClient } from "../client";
 import { getApiUrl, getBrandId } from "../config";
 import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
+import { printNextStep } from "../lib/onboardChain";
 
 // ─── Mediums ─────────────────────────────────────────────────────────────────
 // "Mediums" = the social/content channels the brand wants to grow. Stored at
 // brandSettings.selectedMediums; consumed by the smart-week engine and the
 // weekly scheduler. Wraps GET/PATCH /api/agent/v1/brands/{brandId}/mediums.
+
+// Client-side allowlist for pre-validation (defense-in-depth; server is authoritative).
+const SUPPORTED_MEDIUMS = [
+  "instagram",
+  "facebook",
+  "x/twitter",
+  "linkedin",
+  "threads",
+  "pinterest",
+  "youtube",
+  "blog",
+  "newsletter",
+  "reddit",
+  "landing-pages",
+  "seo",
+] as const;
 
 interface MediumsResponse {
   brandId: string;
@@ -74,13 +91,28 @@ function parseMediumsCsv(csv: string, supported: readonly string[]): string[] {
 
 export async function brandMediumsCommand(
   brandIdArg: string | undefined,
-  options: { json?: boolean; set?: string }
+  options: { json?: boolean; set?: string; yes?: boolean }
 ): Promise<void> {
   const client = createClient();
   const brandId = brandIdArg || getBrandId();
   if (!brandId) {
     console.error("ERROR: No brand id supplied and no active brand set. Run 'pking brand list' or pass <brandId>.");
     process.exit(1);
+  }
+
+  // Pre-validate --set CSV against known allowlist before any network call.
+  if (options.set !== undefined) {
+    const items = options.set.split(",").map((s) => s.trim().toLowerCase()).filter((s) => s.length > 0);
+    for (const item of items) {
+      if (!(SUPPORTED_MEDIUMS as readonly string[]).includes(item)) {
+        console.error(`ERROR: Unknown medium "${item}". Allowed: ${SUPPORTED_MEDIUMS.join(", ")}. Example: --set "linkedin,instagram"`);
+        process.exit(1);
+      }
+    }
+    if (items.length === 0) {
+      console.error(`ERROR: --set requires at least one medium. Allowed: ${SUPPORTED_MEDIUMS.join(", ")}. Example: --set "linkedin,instagram"`);
+      process.exit(1);
+    }
   }
 
   // Fetch current (needed in every path to validate against `supported`).
@@ -116,12 +148,7 @@ export async function brandMediumsCommand(
       console.log("SUCCESS: Mediums updated.\n");
       const after = await client.get(`/api/agent/v1/brands/${brandId}/mediums`);
       renderMediums(after.data as MediumsResponse);
-      console.log("Next step:  pking brand mix                  (confirm content intent mix)\n");
-      console.log("Then:       pking brand themes                (review content themes)");
-      console.log("Then:       pking voice brand list            (review voice profiles — optional)");
-      console.log("Then:       pking brand visual set            (logo + colors)");
-      console.log("Then:       pking brand smart-week            (generate this week's content)");
-      console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+      printNextStep("mediums");
       printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
       return;
     } catch (err) {
@@ -136,9 +163,36 @@ export async function brandMediumsCommand(
   }
 
   renderMediums(res);
-  printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
 
-  // Interactive: prompt comma-separated selection.
+  // --yes: accept the server-suggested defaults without prompting.
+  if (options.yes) {
+    const suggested = res.selectedMediums ?? res.defaults;
+    if (!suggested || suggested.length === 0) {
+      console.error("ERROR: --yes requires a suggestion or default from the server, but none was returned. Pass --set <csv> explicitly.");
+      process.exit(1);
+    }
+    try {
+      const patchRes = await client.patch(
+        `/api/agent/v1/brands/${brandId}/mediums`,
+        { selectedMediums: suggested }
+      );
+      if (options.json) {
+        console.log(JSON.stringify({ ...patchRes.data, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` }, null, 2));
+        return;
+      }
+      console.log("SUCCESS: Mediums accepted (server default).\n");
+      const after = await client.get(`/api/agent/v1/brands/${brandId}/mediums`);
+      renderMediums(after.data as MediumsResponse);
+      printNextStep("mediums");
+      printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
+    } catch (err) {
+      console.error(`\nERROR: ${extractApiError(err)}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // L3: prompt before the URL block so it is not missed.
   console.log("Enter the comma-separated list of mediums to enable.");
   console.log("Press Enter to keep current selection. Examples:");
   console.log("  linkedin,x/twitter,instagram");
@@ -146,12 +200,7 @@ export async function brandMediumsCommand(
   const answer = (await promptLine("> ")).trim();
   if (!answer) {
     console.log("No changes. Mediums unchanged.\n");
-    console.log("Next step:  pking brand mix                  (confirm content intent mix)\n");
-    console.log("Then:       pking brand themes                (review content themes)");
-    console.log("Then:       pking voice brand list            (review voice profiles — optional)");
-    console.log("Then:       pking brand visual set            (logo + colors)");
-    console.log("Then:       pking brand smart-week            (generate this week's content)");
-    console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+    printNextStep("mediums");
     printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
     return;
   }
@@ -170,12 +219,7 @@ export async function brandMediumsCommand(
     console.log("SUCCESS: Mediums updated.\n");
     const after = await client.get(`/api/agent/v1/brands/${brandId}/mediums`);
     renderMediums(after.data as MediumsResponse);
-    console.log("Next step:  pking brand mix                  (confirm content intent mix)\n");
-    console.log("Then:       pking brand themes                (review content themes)");
-    console.log("Then:       pking voice brand list            (review voice profiles — optional)");
-    console.log("Then:       pking brand visual set            (logo + colors)");
-    console.log("Then:       pking brand smart-week            (generate this week's content)");
-    console.log("Finally:    pking brand finalize              (mark onboarding complete)\n");
+    printNextStep("mediums");
     printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
   } catch (err) {
     console.error(`\nERROR: ${extractApiError(err)}`);

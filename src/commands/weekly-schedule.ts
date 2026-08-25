@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { extractApiError } from "../api-error";
+import { validateLanguageFlag } from "../constants";
 
 interface DayMediumConfig {
   medium: string;
@@ -244,8 +245,12 @@ async function toggle(enabled: boolean): Promise<void> {
     const schedule = res.data.schedule as WeeklySchedule;
     console.log(`SUCCESS: Weekly schedule ${schedule.enabled ? "ENABLED" : "DISABLED"}.`);
   } catch (err: unknown) {
+    const reason = extractApiError(err);
     console.error(`ERROR: Could not ${enabled ? "enable" : "disable"} weekly schedule.`);
-    console.error(`Reason: ${extractApiError(err)}`);
+    console.error(`Reason: ${reason}`);
+    if (enabled && /no.*schedule|not found|schedule.*exist/i.test(reason)) {
+      console.error(`Hint: Run 'pking weekly-schedule set --monday "<medium>:<count>,..." --timezone <tz>' first. See 'pking weekly-schedule set --help' for the full flag list.`);
+    }
     process.exit(1);
   }
 }
@@ -266,7 +271,13 @@ export async function weeklyScheduleDeleteCommand(): Promise<void> {
   }
 }
 
-export async function weeklyScheduleRunDayCommand(options: { date?: string }): Promise<void> {
+export async function weeklyScheduleRunDayCommand(options: { date?: string; language?: string }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400. `undefined` when
+  // omitted, so the key stays absent from the body: the server deliberately
+  // has no default on `language` and must be able to tell "caller said en"
+  // from "caller said nothing".
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = requireBrand();
   if (!options.date) {
@@ -281,6 +292,7 @@ export async function weeklyScheduleRunDayCommand(options: { date?: string }): P
   try {
     const res = await client.post(`/api/brands/${brandId}/smart-week`, {
       targetDate: d.toISOString(),
+      language,
     });
     console.log(`SUCCESS: Triggered smart-week for ${options.date}.`);
     if (res.data) {

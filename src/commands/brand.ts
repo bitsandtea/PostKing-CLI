@@ -3,6 +3,8 @@ import { createClient } from "../client";
 import { getApiUrl, getBrandId, setConfig } from "../config";
 import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
+import { printNextStep } from "../lib/onboardChain";
+import { tickLine } from "../lib/ttyOutput";
 
 interface Brand {
   id: string;
@@ -271,7 +273,7 @@ async function fetchBrandReveal(
   };
 }
 
-export async function brandInfoCommand(options: { json?: boolean } = {}): Promise<void> {
+export async function brandInfoCommand(options: { json?: boolean; detail?: boolean } = {}): Promise<void> {
   const client = createClient();
   const brandId = getBrandId();
 
@@ -284,6 +286,25 @@ export async function brandInfoCommand(options: { json?: boolean } = {}): Promis
     const reveal = await fetchBrandReveal(client, brandId);
     if (!reveal) return;
     if (options.json) { console.log(JSON.stringify({ ...reveal, webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` }, null, 2)); return; }
+
+    if (!options.detail) {
+      // Summary view (default) — one screen: id, name, themes count, audience headline
+      const divider = "=".repeat(64);
+      console.log("\n" + divider);
+      console.log(`BRAND SUMMARY: ${reveal.name.toUpperCase()}`);
+      console.log(divider);
+      console.log(`ID:        ${reveal.id}`);
+      console.log(`Name:      ${reveal.name}`);
+      if (reveal.description) console.log(`Desc:      ${reveal.description}`);
+      if (reveal.audience) console.log(`Audience:  ${reveal.audience}`);
+      console.log(`Themes:    ${(reveal.themes || []).length}`);
+      console.log(divider);
+      console.log("(Pass --detail for the full psychographic profile)");
+      console.log("");
+      printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
+      return;
+    }
+
     displayBrandProfile(reveal);
 
     printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}` });
@@ -361,20 +382,48 @@ export function brandSetCommand(brandId: string): void {
 
 export async function brandOnboardCommand(
   websiteUrl: string,
-  options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string }
+  options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string; force?: boolean }
 ): Promise<void> {
   const client = createClient();
   console.log(`\n🚀 TO_AGENT: Starting brand onboarding for ${websiteUrl}...`);
 
+  let onboardRes;
   try {
-    const onboardRes = await client.post("/api/agent/v1/brands/onboard", {
+    onboardRes = await client.post("/api/agent/v1/brands/onboard", {
       websiteUrl,
       name: options.name,
       description: options.description,
       tone: options.tone,
       audience: options.audience,
       brandType: options.brandType,
+      ...(options.force ? { force: true } : {}),
     });
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const data = err?.response?.data || {};
+
+    if (status === 409) {
+      const { existingName, existingBrandId } = data;
+      console.error(`\nBrand already exists for this URL: ${existingName} (${existingBrandId})`);
+      console.error(`To work with the existing brand: pking brand set ${existingBrandId}`);
+      console.error(`To create a duplicate anyway:    pking brand onboard ${websiteUrl} --force`);
+      process.exit(1);
+    }
+
+    if (status === 402) {
+      const { creditsRequired, creditsAvailable } = data;
+      console.error(`\nOnboarding failed: insufficient credits.`);
+      console.error(`Required:  ${creditsRequired ?? "?"}`);
+      console.error(`Available: ${creditsAvailable ?? "?"}`);
+      console.error(`Top up at https://try.postking.app/billing`);
+      process.exit(1);
+    }
+
+    console.error(`\n\nERROR: ${extractApiError(err)}`);
+    process.exit(1);
+  }
+
+  try {
 
     const { brandId } = onboardRes.data;
     console.log(`✅ Onboarding started! Brand ID: ${brandId}`);
@@ -391,11 +440,25 @@ export async function brandOnboardCommand(
       const statusRes = await client.get(`/api/agent/v1/brands/${brandId}/status`);
       const { status, phase, themesCount, isReady: ready, name } = statusRes.data;
 
-      process.stdout.write(`\r[Attempt ${attempts}] Status: ${status} | Phase: ${phase} | Themes: ${themesCount}   `);
+      tickLine(`[Attempt ${attempts}] Status: ${status} | Phase: ${phase} | Themes: ${themesCount}   `);
 
       if (ready || status === "completed") {
         isReady = true;
-        console.log(`\n\n🎉 SUCCESS: Brand '${name}' is fully onboarded!`);
+
+        // Fetch live theme count — the polling snapshot is taken before the
+        // theme-commit step completes, so themesCount from status is stale.
+        let liveThemeCount = themesCount as number | undefined;
+        try {
+          const themesRes = await client.get(`/api/agent/v1/brands/${brandId}/themes`);
+          const themesData = themesRes.data as { themes?: unknown[] };
+          if (Array.isArray(themesData.themes)) {
+            liveThemeCount = themesData.themes.length;
+          }
+        } catch {
+          // Non-fatal — fall back to polling snapshot count
+        }
+
+        console.log(`\n\n🎉 SUCCESS: Brand '${name}' is fully onboarded! Themes: ${liveThemeCount ?? 0}`);
 
         // Auto-set as active brand
         setConfig({ brandId });
@@ -405,14 +468,20 @@ export async function brandOnboardCommand(
         console.log("\n🎉 Here's what we learned about your brand\n");
         const reveal = await fetchBrandReveal(client, brandId);
         if (reveal) {
-          displayBrandProfile(reveal);
-          console.log(`Next step:  pking brand mediums ${brandId}    (pick channels to grow on)`);
-          console.log(`Then:       pking brand mix ${brandId}        (review + confirm your content intent mix)`);
-          console.log("Then:       pking brand themes                 (review content themes)");
-          console.log("Then:       pking voice brand list             (review voice profiles — optional)");
-          console.log("Then:       pking brand visual set --primary-color <hex> --logo <url>");
-          console.log("Then:       pking brand smart-week             (generate this week's content — asks first)");
-          console.log("Finally:    pking brand finalize               (mark onboarding complete)\n");
+          // Show summary only on onboard success to keep output scannable.
+          // Users can run 'pking brand info --detail' for the full profile.
+          const divider = "=".repeat(64);
+          console.log("\n" + divider);
+          console.log(`BRAND SUMMARY: ${reveal.name.toUpperCase()}`);
+          console.log(divider);
+          console.log(`ID:        ${reveal.id}`);
+          if (reveal.description) console.log(`Desc:      ${reveal.description}`);
+          if (reveal.audience) console.log(`Audience:  ${reveal.audience}`);
+          console.log(`Themes:    ${(reveal.themes || []).length}`);
+          console.log(divider);
+          console.log("(Run 'pking brand info --detail' for the full psychographic profile)");
+          console.log("");
+          printNextStep("onboard");
         } else {
           console.log("Next: run 'pking brand info' in a minute to see the full audience analysis.\n");
         }
@@ -518,7 +587,7 @@ export async function brandDeleteCommand(
 
 export async function brandFinalizeCommand(
   brandIdArg: string | undefined,
-  options: { json?: boolean }
+  options: { json?: boolean; yes?: boolean }
 ): Promise<void> {
   const client = createClient();
   const brandId = brandIdArg || getBrandId();
@@ -527,6 +596,14 @@ export async function brandFinalizeCommand(
       "ERROR: No brand id supplied and no active brand set. Pass <brandId> or run 'pking brand set <brandId>'."
     );
     process.exit(1);
+  }
+
+  if (!options.yes && !options.json) {
+    const answer = (await promptLine(`Mark brand ${brandId} as fully onboarded? This cannot be undone. [y/N] `)).trim().toLowerCase();
+    if (answer !== "y" && answer !== "yes") {
+      console.log("Aborted.");
+      return;
+    }
   }
 
   try {
@@ -540,11 +617,7 @@ export async function brandFinalizeCommand(
     }
     console.log(`SUCCESS: Brand ${brandId} marked as fully onboarded.`);
     console.log("");
-    console.log("That's the full chain done:");
-    console.log("  onboard -> mediums -> mix -> themes -> voice -> visual -> smart-week -> finalize");
-    console.log("");
-    console.log("If you haven't yet, generate your first week of content:");
-    console.log(`  pking brand smart-week ${brandId}`);
+    console.log("Full chain: onboard -> mediums -> mix -> audience -> themes -> voice -> visual -> smart-week -> finalize");
     console.log("");
   } catch (err: unknown) {
     console.error(`\nERROR: ${extractApiError(err)}`);

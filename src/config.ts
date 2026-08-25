@@ -51,8 +51,21 @@ export function isEnvVarAuth(): boolean {
   return !!process.env.POSTKING_API_KEY;
 }
 
+let _prodWarningPrinted = false;
+
 export function getApiUrl(): string {
-  return readConfig().apiUrl || DEFAULT_API_URL;
+  if (process.env.POSTKING_API_URL) {
+    return process.env.POSTKING_API_URL;
+  }
+  const cfg = readConfig();
+  if (cfg.apiUrl) return cfg.apiUrl;
+  if (!_prodWarningPrinted) {
+    _prodWarningPrinted = true;
+    process.stderr.write(
+      `WARNING: no ~/.pking/config.json — using prod (${DEFAULT_API_URL}). Run 'pking login' or set POSTKING_API_URL.\n`
+    );
+  }
+  return DEFAULT_API_URL;
 }
 
 export function getBrandId(): string | undefined {

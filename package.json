@@ -19,6 +19,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "test": "tsc --noEmit -p tsconfig.test.json && node --import tsx --test \"src/**/*.test.ts\"",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build"
   },

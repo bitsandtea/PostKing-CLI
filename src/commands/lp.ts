@@ -1,6 +1,8 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
+import { tickLine } from "../lib/ttyOutput";
+import { validateLanguageFlag } from "../constants";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -46,6 +48,7 @@ interface LandingPage {
   slug: string;
   title?: string;
   status?: string;
+  languageCode?: string | null;
 }
 
 export async function lpListCommand(options: { json?: boolean } = {}): Promise<void> {
@@ -57,7 +60,7 @@ export async function lpListCommand(options: { json?: boolean } = {}): Promise<v
     const pages: LandingPage[] = res.data.landingPages ?? res.data.pages ?? res.data ?? [];
     console.log(`\nLanding Pages (${pages.length}):`);
     pages.forEach((p) =>
-      console.log(`  ${p.slug}  [${p.status ?? "draft"}]  ${p.title ?? ""}`)
+      console.log(`  ${p.slug}  [${p.status ?? "draft"}]  [${p.languageCode ?? "unset"}]  ${p.title ?? ""}`)
     );
     printWebUrl(res.data);
   } catch (err) {
@@ -70,7 +73,11 @@ export async function lpGenerateCommand(options: {
   topic: string;
   slug?: string;
   voice?: string;
+  language?: string;
 }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = requireBrand();
   try {
@@ -78,6 +85,7 @@ export async function lpGenerateCommand(options: {
       topic: options.topic,
       slug: options.slug,
       voiceProfileId: options.voice,
+      language,
     });
     const slug = res.data.slug ?? res.data.landingPage?.slug;
     console.log(`SUCCESS: Landing page generation started. Slug: ${slug}`);
@@ -293,15 +301,20 @@ export async function lpVibeCommand(
     instructions: string;
     scope?: string;
     sectionId?: string;
+    language?: string;
     wait?: boolean;
     json?: boolean;
   }
 ): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   try {
     const body: Record<string, unknown> = { instructions: options.instructions };
     if (options.scope) body.scope = options.scope;
     if (options.sectionId) body.sectionId = options.sectionId;
+    if (language) body.language = language;
     const res = await client.post(`/api/agent/v1/landing-pages/${slug}/ai-edit`, body);
     const { operationId, sessionId } = res.data as { operationId: string; sessionId?: string };
 
@@ -323,10 +336,10 @@ export async function lpVibeCommand(
       );
       const status: string = poll.data.status ?? "pending";
       if (status !== lastStatus) {
-        process.stdout.write(`\r[PROCESSING] ${status}                    \n`);
+        tickLine(`[PROCESSING] ${status}                    \n`);
         lastStatus = status;
       } else {
-        process.stdout.write(`\r[PROCESSING] ${status}...`);
+        tickLine(`[PROCESSING] ${status}...`);
       }
       if (VIBE_TERMINAL.has(status)) {
         if (options.json) { emitJson(poll.data); return; }
@@ -435,29 +448,54 @@ export async function lpSideSectionCommand(
   sideKey: string,
   options: {
     id: string;
-    content?: string;
+    fields?: string;
     file?: string;
+    field?: string;
+    value?: string;
     instructions?: string;
+    language?: string;
     json?: boolean;
   }
 ): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400. Only consulted by
+  // the server when --instructions triggers an AI-edit pass; silently ignored
+  // for a plain --fields / --field write.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   try {
     const body: Record<string, unknown> = { sectionId: options.id };
-    if (options.file) {
-      body.content = await readFileOrStdin(options.file);
-    } else if (options.content) {
-      body.content = options.content;
+    // Structured section fields: from a JSON string or a JSON file/stdin.
+    const rawFields = options.file
+      ? await readFileOrStdin(options.file)
+      : options.fields;
+    if (rawFields) {
+      try {
+        body.fields = JSON.parse(rawFields);
+      } catch {
+        printError(new Error("--fields / --file must be valid JSON for a structured section object."));
+        process.exit(1);
+      }
+    }
+    if (options.field) {
+      body.field = options.field;
+      // Parse --value as JSON, falling back to the raw string when it isn't JSON.
+      if (options.value !== undefined) {
+        try {
+          body.value = JSON.parse(options.value);
+        } catch {
+          body.value = options.value;
+        }
+      }
     }
     if (options.instructions) body.instructions = options.instructions;
+    if (language) body.language = language;
     const res = await client.patch(
       `/api/agent/v1/landing-pages/${slug}/side-pages/${sideKey}/section`,
       body
     );
     if (options.json) { emitJson(res.data); return; }
     console.log(`SUCCESS: Section "${options.id}" updated on side page "${sideKey}".`);
-    const sec = res.data.section ?? res.data;
-    if (sec?.content) console.log(`Content: ${String(sec.content).slice(0, 400)}`);
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -551,10 +589,10 @@ export async function lpSideGenerateWithWaitCommand(
       const opStatus = poll.data.operationStatus ?? poll.data;
       const status: string = opStatus?.status ?? poll.data.status ?? "pending";
       if (status !== lastStatus) {
-        process.stdout.write(`\r[PROCESSING] ${status}                    \n`);
+        tickLine(`[PROCESSING] ${status}                    \n`);
         lastStatus = status;
       } else {
-        process.stdout.write(`\r[PROCESSING] ${status}...`);
+        tickLine(`[PROCESSING] ${status}...`);
       }
       if (status === "completed") {
         if (options.json) { emitJson(poll.data); return; }
@@ -636,6 +674,64 @@ export async function lpDraftViewCommand(
     if (p.status) console.log(`Status: ${p.status}`);
     if (p._meta) console.log(`Meta: ${JSON.stringify(p._meta)}`);
     if (p.content) console.log(`Content: ${String(p.content).slice(0, 2000)}`);
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+}
+
+// ─── Translations (110-multilingual-brand) ─────────────────────────────────
+// The translation group a landing page belongs to — the set of language
+// variants of the same page, linked by a shared group id. `lp translate`
+// only creates an empty DRAFT variant row (correct slug suffix + URL path
+// prefix); it does not translate content — see the response's
+// `pullFromSourceUrl` for the next step (an ai-edit call with
+// `pullFromSource: true`).
+
+export async function lpTranslationsCommand(
+  slug: string,
+  options: { json?: boolean }
+): Promise<void> {
+  const client = createClient();
+  try {
+    const res = await client.get(`/api/agent/v1/landing-pages/${slug}/translations`);
+    if (options.json) { emitJson(res.data); return; }
+    const t = res.data;
+    console.log(`\n[Translations: ${slug}]`);
+    console.log(`Language: ${t.languageCode}  Path prefix: ${t.pathPrefix ?? "(default, domain root)"}`);
+    if (!t.translationGroupId) {
+      console.log("No translation group yet — this page has no language variants. Use 'lp translate' to create one.");
+      return;
+    }
+    console.log(`Source page: ${t.isTranslationSource ? "yes (this page)" : "no"}`);
+    console.log(`Variants (${t.variants?.length ?? 0}):`);
+    (t.variants ?? []).forEach((v: { slug: string; languageCode: string; pathPrefix?: string | null; status?: string }) =>
+      console.log(`  ${v.slug}  [${v.languageCode}]  ${v.pathPrefix ?? "(default)"}  status=${v.status ?? "?"}`)
+    );
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+}
+
+export async function lpTranslateCommand(
+  slug: string,
+  options: { language?: string; json?: boolean }
+): Promise<void> {
+  if (!options.language) {
+    console.error("ERROR: --language is required, e.g. --language cs");
+    process.exit(1);
+    return;
+  }
+  const language = validateLanguageFlag(options.language);
+  const client = createClient();
+  try {
+    const res = await client.post(`/api/agent/v1/landing-pages/${slug}/translations`, { language });
+    if (options.json) { emitJson(res.data); return; }
+    const d = res.data;
+    console.log(`\nSUCCESS: Created "${d.languageCode}" variant of "${slug}" -> "${d.slug}" (${d.pathPrefix ?? "(default)"}).`);
+    console.log("No content yet — this is an empty draft. Next step, translate the source page's content:");
+    console.log(`  ${d.pullFromSourceUrl ?? `/api/agent/v1/landing-pages/${d.slug}/ai-edit`}  (call with pullFromSource: true)`);
   } catch (err) {
     printError(err);
     process.exit(1);

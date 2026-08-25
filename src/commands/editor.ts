@@ -2,8 +2,13 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { extractApiError } from "../api-error";
+import { color } from "../lib/ttyOutput";
+import { validateLanguageFlag } from "../constants";
 
-export async function editorRewriteCommand(options: { text: string; voice?: string; platform?: string }): Promise<void> {
+export async function editorRewriteCommand(options: { text: string; voice?: string; platform?: string; language?: string }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = getBrandId();
 
@@ -24,6 +29,7 @@ export async function editorRewriteCommand(options: { text: string; voice?: stri
       voiceId: options.voice,
       platform: isCustomLength ? "custom" : options.platform,
       customCharLimit: customLimit,
+      language,
     });
 
     console.log("\n✅ REWRITTEN CONTENT:");
@@ -108,9 +114,9 @@ export async function editorAICheckCommand(options: { text: string }): Promise<v
     console.log("------------------------------------------");
 
     if (isFake) {
-      console.log(`Verdict: \x1b[31mLIKELY MACHINE-GENERATED\x1b[0m (${aiProb}% probability)`);
+      console.log(`Verdict: ${color(31, "LIKELY MACHINE-GENERATED")} (${aiProb}% probability)`);
     } else {
-      console.log(`Verdict: \x1b[32mLIKELY HUMAN\x1b[0m (${humanProb}% human probability)`);
+      console.log(`Verdict: ${color(32, "LIKELY HUMAN")} (${humanProb}% human probability)`);
     }
 
     console.log(`\nProbabilities:`);

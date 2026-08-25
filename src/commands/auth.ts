@@ -115,18 +115,27 @@ export async function loginWithPasswordCommand(options: AuthOptions): Promise<vo
 export async function meCommand(options: { json?: boolean } = {}): Promise<void> {
   const { createClient } = await import("../client");
   const client = createClient();
+  const apiUrl = getApiUrl();
   try {
     const res = await client.get("/api/agent/v1/me");
-    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    if (options.json) {
+      console.log(JSON.stringify({ ...res.data, apiUrl }, null, 2));
+      return;
+    }
     const { user, brands, activeBrandId, credits, freeTierRemaining, scope, keyName } = res.data;
+    const { agentCredits, billingMode, subscriptionTier } = res.data;
     const authSource = isEnvVarAuth() ? "POSTKING_API_KEY env var" : `stored token (${keyName ?? "—"})`;
     console.log("\n=== PostKing Account ===");
+    console.log(`API URL:         ${apiUrl}`);
     console.log(`User:            ${user?.email ?? "—"}`);
     console.log(`Auth:            ${authSource} (${scope ?? "write"})`);
     console.log(`Credits:         ${credits ?? 0}`);
     console.log(`Free remaining:  ${freeTierRemaining ?? "—"}`);
     console.log(`Active brand:    ${activeBrandId ?? "none"}`);
     console.log(`Brands:          ${(brands ?? []).length}`);
+    console.log(`Agent Credits:   ${agentCredits ?? 0}`);
+    console.log(`Billing Mode:    ${billingMode ?? "—"}`);
+    console.log(`Subscription:    ${subscriptionTier ?? "none"}`);
     (brands ?? []).forEach((b: { brandId: string; name: string }) => {
       console.log(`  - ${b.brandId}  ${b.name}`);
     });

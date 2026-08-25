@@ -2,6 +2,8 @@ import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
+import { color, tickLine } from "../lib/ttyOutput";
+import { validateLanguageFlag } from "../constants";
 
 const VALID_PLATFORMS = ["x", "linkedin", "facebook", "instagram", "threads"];
 
@@ -106,7 +108,19 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     const res = await client.get(`/api/brands/${brandId}/posts?${params.toString()}`);
     const posts: PostResult[] = res.data.posts || [];
 
-    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    if (options.json) {
+      const nowTs = new Date();
+      const enriched = {
+        ...res.data,
+        posts: posts.map((p) => {
+          const schedTime = p.postAt || p.scheduledAt;
+          const isDraft = !p.confirmed && (p.status === "DRAFT" || p.status === "CREATED");
+          return { ...p, pastDue: isDraft && !!schedTime && new Date(schedTime) < nowTs };
+        }),
+      };
+      console.log(JSON.stringify(enriched, null, 2));
+      return;
+    }
 
     if (posts.length === 0) {
       console.log("No posts found for this brand.");
@@ -114,10 +128,15 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     }
 
     console.log(`Latest posts for brand ${brandId}:\n`);
+    const now = new Date();
     posts.forEach((post) => {
+      const isDraft = !post.confirmed && (post.status === "DRAFT" || post.status === "CREATED");
+      const schedTime = post.postAt || post.scheduledAt;
+      const isPastDue = isDraft && !!schedTime && new Date(schedTime) < now;
       const statusStr = post.confirmed ? "APPROVED" : "DRAFT";
-      const schedStr = post.postAt ? ` @ ${new Date(post.postAt).toLocaleString()}` : "";
-      console.log(`  [${statusStr}] ${post.id} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}`);
+      const pastTag = isPastDue ? " [PAST]" : "";
+      const schedStr = schedTime ? ` @ ${new Date(schedTime).toLocaleString()}` : "";
+      console.log(`  [${statusStr}${pastTag}] ${post.id} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}`);
     });
 
     console.log("\nUse 'pking posts generate' to draft a new post.");
@@ -131,6 +150,18 @@ interface PostsApproveOptions {
   variation?: string;
   schedule?: string;
   timezone?: string;
+  yes?: boolean;
+}
+
+async function promptLine(question: string): Promise<string> {
+  const readline = await import("readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
 
 export async function postsApproveCommand(postId: string, options: PostsApproveOptions): Promise<void> {
@@ -140,6 +171,14 @@ export async function postsApproveCommand(postId: string, options: PostsApproveO
   if (!brandId) {
     console.error("ERROR: No active brand selected.");
     process.exit(1);
+  }
+
+  if (!options.yes) {
+    const answer = (await promptLine(`Approve and schedule post ${postId}? [y/N] `)).trim().toLowerCase();
+    if (answer !== "y" && answer !== "yes") {
+      console.log("Aborted.");
+      return;
+    }
   }
 
   const payload: any = {};
@@ -182,12 +221,16 @@ export async function postsApproveCommand(postId: string, options: PostsApproveO
   }
 }
 
-export async function postsGenerateCommand(options: { 
+export async function postsGenerateCommand(options: {
   platform: string;
   theme?: string;
   variations?: number;
   voice?: string;
+  language?: string;
 }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = getBrandId();
 
@@ -220,6 +263,7 @@ export async function postsGenerateCommand(options: {
       randomTheme: !options.theme ? true : undefined,
       variationCount: count,
       voiceProfileId: options.voice,
+      language,
       assignAsset: true
     });
 
@@ -234,18 +278,17 @@ export async function postsGenerateCommand(options: {
       const statusRes = await client.get(`/api/brands/${brandId}/posts/${postId}`);
       const post = statusRes.data.post;
       
-      let opStatus: { status: string; progress?: { message: string }; error?: string } = { status: "pending", progress: { message: "Queuing..." } };
-      try {
-        if (post.operationStatus) opStatus = JSON.parse(post.operationStatus);
-      } catch (e) {}
+      const generationStatus: string = post.generationStatus ?? "pending";
 
-      if (opStatus.status === "completed") {
+      if (generationStatus === "ready") {
         finished = true;
-        
+
         let outputData: any = {};
         try {
           if (post.outputData) outputData = JSON.parse(post.outputData);
-        } catch (e) {}
+        } catch {
+          // non-JSON outputData is treated as empty
+        }
 
         const variations = outputData.variations || [{ content: post.content }];
 
@@ -262,11 +305,11 @@ export async function postsGenerateCommand(options: {
         } else {
           console.log(`Tip: Use 'pking posts approve ${postId}' to schedule this post.`);
         }
-      } else if (opStatus.status === "failed") {
-        console.error(`\n❌ FAILED: ${opStatus.error || "Unknown error"}`);
+      } else if (generationStatus === "failed") {
+        console.error(`\n❌ FAILED: ${post.errorMessage || "Unknown error"}`);
         process.exit(1);
       } else {
-        process.stdout.write(`\r   [PROCESSING] ${opStatus.progress?.message || "Generating..."}`.padEnd(60));
+        tickLine(`   [PROCESSING] ${post.progressMessage || "Generating..."}`.padEnd(60));
         await new Promise(r => setTimeout(r, 2000));
         attempts++;
       }
@@ -326,7 +369,7 @@ export async function postsCalendarCommand(options: { days?: string; json?: bool
 
       if (dateString !== currentDate) {
         currentDate = dateString;
-        console.log(`\x1b[1m${dateString}\x1b[0m`);
+        console.log(color(1, dateString));
         console.log("-----------------");
       }
 
@@ -368,9 +411,22 @@ export async function postsViewCommand(postId: string, options: { json?: boolean
       console.log(`Scheduled: ${new Date(schedTime).toLocaleString()}`);
     }
 
+    const genStatus: string | undefined = (post as unknown as { generationStatus?: string }).generationStatus;
     console.log(`\nCONTENT:`);
     console.log(`--------`);
-    console.log(post.content);
+    if (!post.content?.trim()) {
+      if (genStatus === "failed") {
+        const errMsg: string | undefined = (post as unknown as { errorMessage?: string }).errorMessage;
+        console.log(`(generation failed${errMsg ? `: ${errMsg}` : " — no details available"})`);
+      } else if (genStatus === "ready") {
+        console.log("(content is empty — post may have been cleared or never populated)");
+      } else {
+        // pending or running
+        console.log("(generating — re-run after 'pking jobs list' shows the operation completed)");
+      }
+    } else {
+      console.log(post.content);
+    }
     console.log(`--------`);
 
     if (post.assets && post.assets.length > 0) {
@@ -460,19 +516,32 @@ export async function postsRescheduleCommand(postId: string, options: { date: st
   }
 }
 
-export async function postsDeleteCommand(postId: string): Promise<void> {
+export async function postsDeleteCommand(postId: string, options: { force?: boolean } = {}): Promise<void> {
   const client = createClient();
-  const brandId = getBrandId();
 
-  if (!brandId) {
+  if (!getBrandId()) {
     console.error("ERROR: No active brand selected.");
     process.exit(1);
   }
 
+  const url = options.force
+    ? `/api/agent/v1/posts/${postId}?force=true`
+    : `/api/agent/v1/posts/${postId}`;
+
   try {
-    await client.delete(`/api/brands/${brandId}/posts/${postId}`);
+    await client.delete(url);
     console.log(`SUCCESS: Post ${postId} deleted.`);
   } catch (err: any) {
+    const status = err?.response?.status;
+    const data = err?.response?.data || {};
+
+    if (status === 409) {
+      const opStatus: string = data.operationStatus ?? "RUNNING";
+      console.error(`\nCannot delete: post is still being generated (status: ${opStatus}).`);
+      console.error(`Wait for generation to complete (pking jobs list), or pass --force to delete and orphan the slot.`);
+      process.exit(1);
+    }
+
     console.error(`ERROR: Failed to delete post ${postId}.`);
     console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
@@ -482,11 +551,15 @@ export async function postsDeleteCommand(postId: string): Promise<void> {
 export async function postsGenerateBatchCommand(options: {
   platform: string;
   voice?: string;
+  language?: string;
   frequency: string;
   postsPerDay: string;
   times: string;
   days: string;
 }): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400.
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = getBrandId();
 
@@ -523,6 +596,7 @@ export async function postsGenerateBatchCommand(options: {
       postTimes,
       dateRange: { start: start.toISOString(), end: end.toISOString() },
       voiceProfileId: options.voice,
+      language,
       assetPercentage: 50,
     });
 

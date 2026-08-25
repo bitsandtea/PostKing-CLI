@@ -109,6 +109,14 @@ export async function voiceListCommand(options: VoiceListOptions = {}): Promise<
 const BRAND_VOICE_BASE = (brandId: string) =>
   `/api/agent/v1/brands/${brandId}/voice-profiles`;
 
+type VoiceSource = "owned" | "shared" | "public";
+
+function deriveSource(p: BrandVoiceProfile, brandId: string): VoiceSource {
+  if (p.brandId === brandId) return "owned";
+  if (p.brandId) return "shared";
+  return "public";
+}
+
 function renderBrandVoiceList(
   profiles: BrandVoiceProfile[],
   brandId: string,
@@ -118,29 +126,42 @@ function renderBrandVoiceList(
     console.log(`No voice profiles available for brand ${brandId}.`);
     return;
   }
-  const filtered = includePublic
-    ? profiles
-    : profiles.filter((p) => p.brandId === brandId);
-  if (filtered.length === 0) {
+
+  const ownedProfiles = profiles.filter((p) => deriveSource(p, brandId) === "owned");
+  const sharedProfiles = profiles.filter((p) => deriveSource(p, brandId) === "shared");
+  const publicProfiles = profiles.filter((p) => deriveSource(p, brandId) === "public");
+
+  if (ownedProfiles.length === 0 && !includePublic) {
     console.log(
-      `No brand-owned voice profiles for ${brandId}. Pass --include-public to also list public profiles available to this brand.`
+      `No brand-owned voice profiles for ${brandId}. Pass --include-public to also list shared/public profiles available to this brand.`
     );
     return;
   }
-  console.log(`Voice profiles for brand ${brandId} (${filtered.length}):\n`);
-  for (const p of filtered) {
-    const name = p.name || p.authorName || "Anonymous";
-    const scope = p.brandId === brandId ? "brand" : "public";
-    const state = p.isActive === false ? "inactive" : "active";
-    const platforms = (p.optimizedMedium || []).join(", ");
-    console.log(`  ID:        ${p.id}`);
-    console.log(`  Name:      ${name}`);
-    console.log(`  Scope:     ${scope}`);
-    console.log(`  State:     ${state}`);
-    if (platforms) console.log(`  Platforms: ${platforms}`);
-    if (p.modalAdapterId) console.log(`  Adapter:   ${p.modalAdapterId}`);
-    if (p.description) console.log(`  Desc:      ${p.description}`);
-    console.log("");
+
+  function renderGroup(label: string, group: BrandVoiceProfile[], source: VoiceSource): void {
+    if (group.length === 0) return;
+    console.log(`\n[ ${label.toUpperCase()} — ${group.length} ]`);
+    for (const p of group) {
+      const name = p.name || p.authorName || "Anonymous";
+      const state = p.isActive === false ? "inactive" : "active";
+      const platforms = (p.optimizedMedium || []).join(", ");
+      console.log(`  ID:        ${p.id}`);
+      console.log(`  Name:      ${name}`);
+      console.log(`  Source:    ${source}`);
+      console.log(`  State:     ${state}`);
+      if (platforms) console.log(`  Platforms: ${platforms}`);
+      if (p.modalAdapterId) console.log(`  Adapter:   ${p.modalAdapterId}`);
+      if (p.description) console.log(`  Desc:      ${p.description}`);
+      console.log("");
+    }
+  }
+
+  console.log(`Voice profiles for brand ${brandId}:`);
+  renderGroup("Owned by this brand", ownedProfiles, "owned");
+
+  if (includePublic) {
+    renderGroup("Shared (owned by another brand)", sharedProfiles, "shared");
+    renderGroup("Public catalog", publicProfiles, "public");
   }
 }
 
@@ -155,7 +176,11 @@ export async function voiceBrandListCommand(
     const res = await client.get(BRAND_VOICE_BASE(brandId));
     const profiles: BrandVoiceProfile[] = res.data.voiceProfiles || [];
     if (options.json) {
-      console.log(JSON.stringify(res.data, null, 2));
+      const enriched = {
+        ...res.data,
+        voiceProfiles: profiles.map((p) => ({ ...p, source: deriveSource(p, brandId) })),
+      };
+      console.log(JSON.stringify(enriched, null, 2));
       return;
     }
     renderBrandVoiceList(profiles, brandId, options.includePublic === true);

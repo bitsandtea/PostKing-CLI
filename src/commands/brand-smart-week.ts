@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { extractApiError } from "../api-error";
+import { validateLanguageFlag } from "../constants";
 
 // ─── Smart-week ──────────────────────────────────────────────────────────────
 // Generates a full Mon-Fri week of posts across the brand's selectedMediums.
@@ -43,8 +44,14 @@ async function promptLine(question: string): Promise<string> {
 
 export async function brandSmartWeekCommand(
   brandIdArg: string | undefined,
-  options: { yes?: boolean; json?: boolean }
+  options: { yes?: boolean; json?: boolean; allowPast?: boolean; language?: string }
 ): Promise<void> {
+  // Validate the flag before anything else — a bad code should fail with the
+  // list of valid ones, not an auth error or a server 400. `undefined` when
+  // the flag was omitted, so the key stays absent from the body: the server
+  // deliberately has no default on `language` and must be able to tell
+  // "caller said en" from "caller said nothing".
+  const language = validateLanguageFlag(options.language);
   const client = createClient();
   const brandId = brandIdArg || getBrandId();
   if (!brandId) {
@@ -97,8 +104,26 @@ export async function brandSmartWeekCommand(
   try {
     const res = await client.post(SMART_WEEK_ROUTE(brandId), {
       source: "cli",
+      language,
     });
     const data = res.data as SmartWeekResponse;
+
+    // Guard: if the server returned a scheduledAt list, warn about past slots.
+    // The server now defaults to next-week when today >= Wednesday, but a
+    // caller passing an explicit dateRange or hitting a race could still land
+    // past-dated slots. Refuse unless --allow-past is set.
+    const now = new Date();
+    const scheduledDates: Date[] = (data as unknown as { slots?: { scheduledAt: string }[] }).slots
+      ? (data as unknown as { slots: { scheduledAt: string }[] }).slots.map((s) => new Date(s.scheduledAt))
+      : [];
+    const pastSlots = scheduledDates.filter((d) => d < now);
+    if (pastSlots.length > 0 && !options.allowPast) {
+      const earliest = pastSlots.sort((a, b) => a.getTime() - b.getTime())[0];
+      console.error(`\nWARNING: ${pastSlots.length} slot(s) would be scheduled in the past (earliest: ${earliest.toLocaleString()}).`);
+      console.error("Generation was NOT started. Re-run with --allow-past to override, or wait until the server auto-advances to next week.");
+      process.exit(1);
+      return;
+    }
 
     if (options.json) {
       console.log(JSON.stringify(data, null, 2));

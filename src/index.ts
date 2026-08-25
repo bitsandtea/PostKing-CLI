@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import { LANGUAGE_FLAG_DESCRIPTION, SUPPORTED_LANGUAGE_CODES } from "./constants";
 import { loginWithPasswordCommand, meCommand, registerCommand } from "./commands/auth";
 import { authorsCreateCommand, authorsListCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
 import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
 import { jobsListCommand } from "./commands/jobs";
 import { brandCreateCommand, brandDeleteCommand, brandFinalizeCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand } from "./commands/brand";
 import { brandMixCommand } from "./commands/brand-mix";
+import { brandLanguageCommand } from "./commands/brand-language";
+import { brandLanguagesCommand } from "./commands/brand-languages";
 import { brandMediumsCommand } from "./commands/brand-mediums";
 import { brandSmartWeekCommand } from "./commands/brand-smart-week";
 import { brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand-themes";
@@ -18,6 +21,7 @@ import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } fro
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
 import { loginCommand } from "./commands/login";
 import { loginStartCommand, loginFinishCommand, registerStartCommand, registerFinishCommand, resendCommand, resetPasswordCommand, resetPasswordFinishCommand } from "./commands/auth-device";
+import { redditPoolCommand, redditRewriteCommand } from "./commands/reddit";
 import { logoutCommand } from "./commands/logout";
 import {
   lpDeleteCommand,
@@ -36,6 +40,8 @@ import {
   lpSideStateCommand,
   lpSideStatusCommand,
   lpSideViewCommand,
+  lpTranslateCommand,
+  lpTranslationsCommand,
   lpVersionsListCommand,
   lpVersionsViewCommand,
   lpVibeCommand,
@@ -45,10 +51,12 @@ import {
 import { postsApproveCommand, postsCalendarCommand, postsCancelCommand, postsCreateCommand, postsDeleteCommand, postsGenerateBatchCommand, postsGenerateCommand, postsListCommand, postsRescheduleCommand, postsScheduleCommand, postsViewCommand } from "./commands/posts";
 import { publicationsCreateCommand, publicationsListCommand } from "./commands/publications";
 import { repurposeCommand } from "./commands/repurpose";
-import { seoCategorizeCommand, seoClustersListCommand, seoClusterCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoPublishCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
+import { seoBriefsApproveCommand, seoBriefsBulkApproveCommand, seoBriefsGenerateCommand, seoBriefsGenerateOneCommand, seoBriefsListCommand, seoBriefsRegenerateCommand, seoBriefsRejectCommand, seoBriefsViewCommand, seoCategorizeCommand, seoClusterCommand, seoClustersApproveCommand, seoClustersBulkApproveCommand, seoClustersBulkRejectCommand, seoClustersGenerateCommand, seoClustersListCommand, seoClustersRejectCommand, seoClustersRestoreCommand, seoClustersUnapproveCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoKeywordsDeleteCommand, seoKeywordsEditCommand, seoKeywordsListCommand, seoLinkHealthCommand, seoMarketCommand, seoMarketSetCommand, CURATED_MARKET_CODES, MARKET_HELP, seoPublishCommand, seoResearchEstimateCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
+import { competitorsAddCommand, competitorsComparisonCommand, competitorsComparisonRecomputeCommand, competitorsDeleteCommand, competitorsImportCommand, competitorsListCommand, competitorsRefreshCommand, competitorsSampleCommand } from "./commands/competitors";
 import { socialConnectPlatformCommand } from "./commands/social-extra";
 import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } from "./commands/social";
 import { userCreditsCommand } from "./commands/user";
+import { billingPacksCommand, billingTopupCommand, billingWalletCommand, billingTiersCommand, billingSubscribeCommand } from "./commands/billing";
 import { voiceBrandDeleteCommand, voiceBrandListCommand, voiceBrandUpdateCommand, voiceListCommand, voiceRewriteCommand } from "./commands/voice";
 import { trendsListCommand } from "./commands/trends";
 import { runUpdateCheck } from "./update-check";
@@ -80,6 +88,7 @@ import {
   weeklyScheduleRunDayCommand,
   weeklyScheduleSetCommand,
 } from "./commands/weekly-schedule";
+import { timezoneSetCommand } from "./commands/timezone";
 
 const program = new Command();
 
@@ -233,9 +242,10 @@ brand
 
 brand
   .command("info")
-  .description("View detailed profile of the active brand (audience, tone, metrics).")
+  .description("Show brand summary (id, name, themes count, audience headline). Pass --detail for the full psychographic profile.")
+  .option("--detail", "Show full psychographic profile instead of the one-screen summary")
   .option("--json", "Output raw JSON")
-  .action((opts) => brandInfoCommand(opts));
+  .action((opts: { detail?: boolean; json?: boolean }) => brandInfoCommand(opts));
 
 brand
   .command("generate-themes")
@@ -287,7 +297,8 @@ brand
     "Non-interactive override. Pass a JSON object like\n" +
     "  '{\"intentMix\":{\"educate\":30,\"connect\":20,\"present\":35,\"intrigue\":15}}'."
   )
-  .action((brandId: string | undefined, opts: { json?: boolean; set?: string }) =>
+  .option("--yes", "Accept the server-suggested or current mix without prompting (non-interactive)")
+  .action((brandId: string | undefined, opts: { json?: boolean; set?: string; yes?: boolean }) =>
     brandMixCommand(brandId, opts)
   );
 
@@ -305,8 +316,47 @@ brand
     "Non-interactive override. Comma-separated list, e.g.\n" +
     "  --set 'linkedin,x/twitter,instagram,blog'"
   )
-  .action((brandId: string | undefined, opts: { json?: boolean; set?: string }) =>
+  .option("--yes", "Accept the server-suggested or saved medium list without prompting (non-interactive)")
+  .action((brandId: string | undefined, opts: { json?: boolean; set?: string; yes?: boolean }) =>
     brandMediumsCommand(brandId, opts)
+  );
+
+brand
+  .command("language [brandId]")
+  .description(
+    "Read or set the brand's content language — the language every generator\n" +
+    "writes in by default. Stored at brandSettings.contentLanguage. With no\n" +
+    "flags, prints the current language plus the supported set and prompts for\n" +
+    "a new code. Use --set for non-interactive runs. Affects NEW generations\n" +
+    "only; nothing already generated is translated. To change the language for\n" +
+    "a single call instead, pass --language <code> to that generate command."
+  )
+  .option("--json", "Print the fetched language as JSON and exit (no prompt)")
+  .option(
+    "--set <code>",
+    "Non-interactive override. A single language code, e.g.\n" +
+    "  --set cs"
+  )
+  .action((brandId: string | undefined, opts: { json?: boolean; set?: string }) =>
+    brandLanguageCommand(brandId, opts)
+  );
+
+brand
+  .command("languages [brandId]")
+  .description(
+    "Read or manage the SET of languages a brand publishes in (110-multilingual-brand).\n" +
+    "Distinct from 'brand language', which reads/sets only the single DEFAULT\n" +
+    "language. A brand can enable more than one language, each with its own\n" +
+    "keyword research, blog, and landing pages — the default sits at the domain\n" +
+    "root, every other enabled language sits under /{languageCode}. With no\n" +
+    "flags, prints the enabled set. Gated by the brand's plan (Trial/Growth 1,\n" +
+    "Pro 2, Enterprise 5)."
+  )
+  .option("--json", "Print the fetched languages as JSON and exit")
+  .option("--add <code>", "Enable a language, e.g. --add cs")
+  .option("--remove <code>", "Disable a language (never the default), e.g. --remove cs")
+  .action((brandId: string | undefined, opts: { json?: boolean; add?: string; remove?: string }) =>
+    brandLanguagesCommand(brandId, opts)
   );
 
 brand
@@ -318,7 +368,9 @@ brand
   )
   .option("--yes", "Skip the consent prompt (non-interactive)")
   .option("--json", "Emit the raw kickoff payload (sessionId + operationId)")
-  .action((brandId: string | undefined, opts: { yes?: boolean; json?: boolean }) =>
+  .option("--allow-past", "Allow scheduling slots that fall in the past (use with caution)")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
+  .action((brandId: string | undefined, opts: { yes?: boolean; json?: boolean; allowPast?: boolean; language?: string }) =>
     brandSmartWeekCommand(brandId, opts)
   );
 
@@ -328,10 +380,11 @@ brand
     "Mark the brand as fully onboarded (sets brandSettings.isOnboarded = true).\n" +
     "Mirrors the final PATCH the web onboarding flow issues at the end of\n" +
     "VisualIdentitySetup. Run this once the full chain is done: onboard ->\n" +
-    "mediums -> mix -> themes -> voice -> visual -> smart-week -> finalize."
+    "mediums -> mix -> audience -> themes -> voice -> visual -> smart-week -> finalize."
   )
+  .option("--yes", "Skip the confirmation prompt (non-interactive)")
   .option("--json", "Emit raw JSON payload")
-  .action((brandId: string | undefined, opts: { json?: boolean }) =>
+  .action((brandId: string | undefined, opts: { json?: boolean; yes?: boolean }) =>
     brandFinalizeCommand(brandId, opts)
   );
 
@@ -472,7 +525,8 @@ program
   .option("--tone <tone>", "Initial tone description (passed through).")
   .option("--audience <audience>", "Target audience description (passed through).")
   .option("--brand-type <type>", "Brand type: personal | business (default business).")
-  .action((url: string, options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string }) => brandOnboardCommand(url, options))
+  .option("--force", "Allow creating a duplicate brand even if one already exists for this URL.")
+  .action((url: string, options: { name?: string; description?: string; tone?: string; audience?: string; brandType?: string; force?: boolean }) => brandOnboardCommand(url, options))
   .addHelpText('after', `
 Example:
   $ pking onboard https://postking.app --name "PostKing Agent"
@@ -508,6 +562,7 @@ posts
   .option("--theme <text>", "Specific theme or topic to write about (random if omitted)")
   .option("--variations <number>", "Number of variations to generate (default: 1)", "1")
   .option("--voice <profile_id>", "Voice profile ID to use (optional)")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((options) => postsGenerateCommand(options));
 
 posts
@@ -515,6 +570,7 @@ posts
   .description("Generate and schedule multiple posts across a date range")
   .requiredOption("--platform <platform>", "Target platform (x, linkedin, etc., or 'custom:<chars>')")
   .option("--voice <profile_id>", "Optional Voice Profile ID to apply")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .option("--frequency <freq>", "Posting frequency: daily, every_other, every_third, weekdays (default: daily)", "daily")
   .option("--posts-per-day <number>", "Number of posts per day (default: 1)", "1")
   .option("--times <times>", "Comma-separated posting times (default: 09:00,14:00)", "09:00,14:00")
@@ -537,12 +593,13 @@ posts
   .description(
     "Confirm a draft post. Without --schedule it joins the automated queue;\n" +
     "with --schedule it is pinned to that time. Use 'pking posts schedule' if\n" +
-    "you want the scheduling intent to be explicit."
+    "you want the scheduling intent to be explicit. Pass --yes to skip the prompt."
   )
   .option("--variation <number>", "Select a specific variation to publish (1-based index)")
   .option("--schedule <iso_date>", "ISO 8601 datetime to schedule the post (otherwise queued)")
   .option("--timezone <string>", "User timezone (e.g. America/New_York)")
-  .action((id, options) => postsApproveCommand(id, options));
+  .option("--yes", "Skip confirmation prompt (non-interactive)")
+  .action((id, options: { variation?: string; schedule?: string; timezone?: string; yes?: boolean }) => postsApproveCommand(id, options));
 
 posts
   .command("schedule <postId>")
@@ -572,8 +629,9 @@ posts
 
 posts
   .command("delete <postId>")
-  .description("Soft delete a post.")
-  .action((id) => postsDeleteCommand(id));
+  .description("Soft delete a post. Refuses if post is still being generated unless --force is passed.")
+  .option("--force", "Delete even if the post is still being generated (orphans the generation slot).")
+  .action((id, opts: { force?: boolean }) => postsDeleteCommand(id, opts));
 
 // ─── user ────────────────────────────────────────────────────────────────────
 const userSub = program
@@ -585,6 +643,44 @@ userSub
   .description("Check your current credit balance.")
   .option("--json", "Output raw JSON")
   .action((opts) => userCreditsCommand(opts));
+
+// ─── billing ─────────────────────────────────────────────────────────────────
+const billing = program
+  .command("billing")
+  .description("Manage agent credits, top-up packs, and subscriptions.");
+
+billing
+  .command("packs")
+  .description("List available credit packs with pricing.")
+  .option("--json", "Output raw JSON")
+  .action((opts) => billingPacksCommand(opts));
+
+billing
+  .command("topup")
+  .description("Purchase a credit pack and poll for payment confirmation.")
+  .requiredOption("--pack <sku>", "Pack SKU: agent_4 | agent_5 | agent_25 | agent_50")
+  .option("--json", "Output raw JSON")
+  .action((opts) => billingTopupCommand(opts));
+
+billing
+  .command("wallet")
+  .description("Show current agent credit balance and recent transactions.")
+  .option("--json", "Output raw JSON")
+  .action((opts) => billingWalletCommand(opts));
+
+billing
+  .command("tiers")
+  .description("List subscription tiers with pricing and monthly credit allowances.")
+  .option("--json", "Output raw JSON")
+  .action((opts) => billingTiersCommand(opts));
+
+billing
+  .command("subscribe")
+  .description("Start a subscription checkout and poll for activation confirmation.")
+  .requiredOption("--tier <GROWTH|PRO|ENTERPRISE>", "Subscription tier to activate")
+  .option("--interval <month|year>", "Billing interval: month or year (default: month)")
+  .option("--json", "Output raw JSON")
+  .action((opts) => billingSubscribeCommand(opts));
 
 // ─── social ──────────────────────────────────────────────────────────────────
 const social = program
@@ -787,7 +883,22 @@ weekly
   .command("run-day")
   .description("Run smart-week generation for a single date (YYYY-MM-DD).")
   .requiredOption("--date <YYYY-MM-DD>", "Target date")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((options) => weeklyScheduleRunDayCommand(options));
+
+// ─── timezone ────────────────────────────────────────────────────────────────
+program
+  .command("timezone [iana]")
+  .description(
+    "View or set the active brand's IANA timezone used for post scheduling.\n" +
+    "No args: show current brand timezone and machine local timezone.\n" +
+    "<iana>: set the brand timezone to the given IANA string (e.g. America/New_York).\n" +
+    "--local: detect the machine's local timezone and set it on the brand."
+  )
+  .option("--local", "Use the machine's local timezone as the new brand timezone")
+  .action((iana: string | undefined, opts: { local?: boolean }) =>
+    timezoneSetCommand(iana, opts)
+  );
 
 // ─── editor ──────────────────────────────────────────────────────────────────
 const editor = program
@@ -800,6 +911,7 @@ editor
   .requiredOption("--text <text>", "The text to rewrite")
   .option("--voice <id>", "Voice profile ID to apply")
   .option("--platform <platform>", "Target platform (x, linkedin, etc., or 'custom:<chars>')")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((options) => editorRewriteCommand(options));
 
 editor
@@ -833,6 +945,7 @@ program
   .option("--voice <profile_id_or_map>", "Voice profile ID (e.g. 123 or x:123,linkedin:456)")
   .option("--theme-id <id>", "Theme ID to associate when repurposing")
   .option("--include-link", "Whether to explicitly include the source link in the generated post")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((options) => repurposeCommand(options));
 
 // ─── register / login (email+password) / me ──────────────────────────────────
@@ -898,6 +1011,12 @@ blogs
   .description("Create a new blog publication.")
   .requiredOption("--title <title>", "Publication name")
   .option("--description <desc>", "Description")
+  .option(
+    "--language-code <code>",
+    `Language for this new publication (${SUPPORTED_LANGUAGE_CODES.join(", ")}). Omit to default to the ` +
+    "brand's content language. Must already be enabled on the brand's language roster — see " +
+    "'pking brand languages --add <code>'."
+  )
   .action((opts) => blogsCreateCommand(opts));
 
 blogs
@@ -910,6 +1029,7 @@ blogs
   .option("--keywords <csv>", "Comma-separated primary keywords")
   .option("--wait", "Block and poll until the article is ready")
   .option("--timeout <seconds>", "Max seconds to wait when --wait is set", "600")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((opts) => blogsGenerateCommand(opts));
 
 blogs
@@ -945,6 +1065,36 @@ jobs
   .option("--json", "Output raw JSON")
   .action((opts) => jobsListCommand(opts));
 
+// ─── reddit ──────────────────────────────────────────────────────────────────
+const reddit = program.command("reddit").description("Test the Reddit rewrite feature end-to-end (rewrite content for a subreddit, inspect the pooled subreddit list).");
+
+reddit
+  .command("rewrite")
+  .description(
+    "Rewrite seed text or an existing blog article into a Reddit-native post for a\n" +
+    "subreddit, then poll to completion and print each saved variation with its\n" +
+    "compliance verdict. Provide exactly one of --seed or --blog."
+  )
+  .requiredOption("--subreddit <name>", "Target subreddit, with or without leading 'r/'")
+  .option("--seed <text>", "Seed text to rewrite (mutually exclusive with --blog)")
+  .option("--blog <articleId>", "Blog article ID to rewrite (mutually exclusive with --seed)")
+  .option("--title <text>", "Source title (only meaningful in --seed mode)")
+  .option("--angle <angle>", "Content angle", "educational")
+  .option("--length <short|medium|long>", "Target length")
+  .option("--voice <voiceId>", "Voice profile ID")
+  .option("--variations <n>", "Number of variations to generate (1-3)", "1")
+  .option("--repeat <n>", "Run the whole rewrite flow N times sequentially, for eyeballing variance", "1")
+  .option("--json", "Dump raw outputData JSON for each post instead of pretty-printed output")
+  .option("--brand <brandId>", "Brand id (defaults to active brand)")
+  .action((opts) => redditRewriteCommand(opts));
+
+reddit
+  .command("pool")
+  .description("List this brand's pooled subreddits (display name, posting style, rule count).")
+  .option("--json", "Output raw JSON")
+  .option("--brand <brandId>", "Brand id (defaults to active brand)")
+  .action((opts) => redditPoolCommand(opts));
+
 // ─── publications / authors / categories ─────────────────────────────────────
 const publications = program.command("publications").description("Manage blog publications.");
 publications.command("list").option("--json", "Output raw JSON").action((opts) => publicationsListCommand(opts));
@@ -952,6 +1102,12 @@ publications
   .command("create")
   .requiredOption("--title <title>")
   .option("--description <desc>")
+  .option(
+    "--language-code <code>",
+    `Language for this new publication (${SUPPORTED_LANGUAGE_CODES.join(", ")}). Omit to default to the ` +
+    "brand's content language. Must already be enabled on the brand's language roster — see " +
+    "'pking brand languages --add <code>'."
+  )
   .action((opts) => publicationsCreateCommand(opts));
 
 const authors = program.command("authors").description("Manage blog authors.");
@@ -991,6 +1147,7 @@ lp
   .requiredOption("--topic <topic>", "Topic or theme for the landing page")
   .option("--slug <slug>", "Custom URL slug")
   .option("--voice <id>", "Voice profile ID")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .action((opts) => lpGenerateCommand(opts));
 lp
   .command("edit <slug>")
@@ -1047,11 +1204,18 @@ lpSide
 
 lpSide
   .command("section <slug> <sideKey>")
-  .description("Update a single section within a side-page.")
+  .description("Update a single section within a side-page using structured, typed fields.")
   .requiredOption("--id <sectionId>", "Section ID to update")
-  .option("--content <text>", "New section content (inline)")
-  .option("--file <path>", "Path to file with section content (use - for stdin)")
-  .option("--instructions <text>", "AI editing instructions for the section")
+  .option("--fields <json>", "Structured partial section object as JSON (merged onto the section)")
+  .option("--file <path>", "Path to a JSON file with the structured section fields (use - for stdin)")
+  .option("--field <path>", "Dot-path to a single nested field (e.g. title.prefix). Requires --value")
+  .option("--value <json>", "New value for --field (parsed as JSON, falls back to string)")
+  .option(
+    "--instructions <text>",
+    "Alone, triggers a real AI-edit pass scoped to this section. Combined with --fields/--field, " +
+    "stored only as an annotation for future context (no AI pass runs)."
+  )
+  .option("--language <code>", `${LANGUAGE_FLAG_DESCRIPTION} Only consulted when --instructions triggers an AI-edit pass (i.e. passed alone, without --fields/--field).`)
   .option("--json", "Emit raw JSON payload")
   .action((slug, sideKey, opts) => lpSideSectionCommand(slug, sideKey, opts));
 
@@ -1087,13 +1251,15 @@ const lpVibe = lp
   .requiredOption("--instructions <text>", "What to change about the landing page")
   .option("--scope <scope>", "Edit scope: full | section")
   .option("--section-id <id>", "Section ID (required when --scope=section)")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
   .option("--wait", "Poll until the edit completes (up to 120s)")
   .option("--json", "Emit raw JSON payload")
-  .action((slug: string, opts: { instructions: string; scope?: string; sectionId?: string; wait?: boolean; json?: boolean }) =>
+  .action((slug: string, opts: { instructions: string; scope?: string; sectionId?: string; language?: string; wait?: boolean; json?: boolean }) =>
     lpVibeCommand(slug, {
       instructions: opts.instructions,
       scope: opts.scope,
       sectionId: opts.sectionId,
+      language: opts.language,
       wait: opts.wait,
       json: opts.json,
     }),
@@ -1148,6 +1314,29 @@ lpDraft
   .option("--json", "Emit raw JSON payload")
   .action((slug, opts) => lpDraftViewCommand(slug, opts));
 
+// ─── lp translations (110-multilingual-brand) ─────────────────────────────────
+lp
+  .command("translations <slug>")
+  .description(
+    "Read the translation group a landing page belongs to — its language,\n" +
+    "URL path prefix, and any other-language variants already created."
+  )
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, opts) => lpTranslationsCommand(slug, opts));
+
+lp
+  .command("translate <slug>")
+  .description(
+    "Create a new language variant of a landing page, linked into a shared\n" +
+    "translation group with the source page. Creates an empty DRAFT row only —\n" +
+    "does not translate content. Follow up with the printed pullFromSourceUrl\n" +
+    "(an ai-edit call with pullFromSource: true) to translate the source's\n" +
+    "content into the new variant."
+  )
+  .option("--language <code>", "Language of the new variant, e.g. --language cs (required)")
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, opts) => lpTranslateCommand(slug, opts));
+
 // ─── domains extras (add, delete, connect) ───────────────────────────────────
 domains
   .command("add <domain>")
@@ -1164,48 +1353,105 @@ domains
   .action((id, opts) => domainsConnectCommand(id, opts));
 
 // ─── SEO ─────────────────────────────────────────────────────────────────────
-const seo = program.command("seo").description("Run the PostKing SEO agentic pipeline end-to-end.");
+const seo = program.command("seo").description("Run the PostKing SEO agentic pipeline: seeds → generate (L0) → score → clusters generate (L2) → approve clusters → briefs generate (L3) → approve briefs → write article (L4).");
 
 seo
   .command("seeds <seeds...>")
   .description("Add seed keywords to start the SEO flow.")
   .option("--brand <id>")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
   .action((seeds, opts) => seoSeedsCommand(seeds, opts));
 
 seo
   .command("generate")
-  .description("Expand seeds into a larger keyword universe.")
+  .description(
+    "Pull keywords from DataForSEO for this brand's seeds (L0). Async.\n" +
+    "Pass --language to scope the run to ONE of the brand's languages\n" +
+    "(110-multilingual-brand) instead of every configured market — never\n" +
+    "automatic, check 'seo research-cost <language>' first."
+  )
   .option("--brand <id>")
-  .option("--count <n>", "Number of keywords to generate", "100")
+  .option("--no-score", "Disable automatic scoring after pull (sets autoScore=false)")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .option("--language <code>", "Scope this run to one of the brand's languages, e.g. --language cs")
   .action((opts) => seoGenerateCommand(opts));
 
 seo
+  .command("research-cost <language>")
+  .description(
+    "Read-only. Estimate the USD cost of 'seo generate --language <language>' before running it\n" +
+    "(110-multilingual-brand decision 7 — per-language research is never automatic)."
+  )
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((language, opts) => seoResearchEstimateCommand(language, opts));
+
+const seoKeywords = seo
   .command("keywords")
-  .description("List generated keywords.")
+  .description("List generated keywords. Use seo keywords edit/delete for item-level operations.")
   .option("--brand <id>")
   .option("--limit <n>", "Limit results")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => seoKeywordsCommand(opts));
 
+seoKeywords
+  .command("list")
+  .description("List all keywords for the active brand.")
+  .option("--brand <id>")
+  .option("--limit <n>", "Limit number of results")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoKeywordsListCommand(opts));
+
+seoKeywords
+  .command("edit <id>")
+  .description("Update tags, intent, priority, or clustering exclusion on a keyword.")
+  .option("--brand <id>")
+  .option("--tags <csv>", "Comma-separated userTags to set")
+  .option("--intent <intent>", "Intent: informational|commercial|navigational|transactional")
+  .option("--priority <n>", "Priority score between 0 and 1 inclusive")
+  .option("--exclude-clustering", "Exclude this keyword from clustering")
+  .option("--include-clustering", "Include this keyword in clustering (clears exclusion)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoKeywordsEditCommand(id, opts));
+
+seoKeywords
+  .command("delete <id>")
+  .description("Soft-delete a keyword by ID.")
+  .option("--brand <id>")
+  .option("--destructive", "Required confirmation flag")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoKeywordsDeleteCommand(id, opts));
+
 seo
   .command("categorize")
-  .description("Auto-categorize keywords by intent.")
+  .description("Manually set intent/tags on keywords (override). Use --file <json> or --keyword/--intent/--tags.")
   .option("--brand <id>")
+  .option("--file <path>", "JSON file containing an array of update objects")
+  .option("--keyword <id>", "Single keyword ID to update")
+  .option("--intent <intent>", "Intent: informational|commercial|navigational|transactional")
+  .option("--tags <csv>", "Comma-separated userTags")
+  .option("--json", "Emit raw JSON payload")
   .action((opts) => seoCategorizeCommand(opts));
 
 seo
   .command("cluster")
-  .description("Cluster related keywords into topic groups.")
+  .description("Generate keyword clusters from scored keywords (L2). Async.")
   .option("--brand <id>")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
   .action((opts) => seoClusterCommand(opts));
 
 const seoRoadmap = seo
   .command("roadmap")
-  .description("List roadmap items or generate a roadmap from a cluster. Also includes item-level CRUD subcommands.")
+  .description("List roadmap items. Use seo roadmap edit/view/delete for item-level operations.")
   .option("--brand <id>")
-  .option("--cluster <id>", "Cluster ID to generate roadmap from")
-  .option("--items <n>", "Number of items to generate")
-  .option("--limit <n>", "Cap number of items shown")
+  .option("--status <status>", "Filter by status")
+  .option("--type <type>", "Filter by type")
+  .option("--priority <value>", "Filter by priority")
+  .option("--cluster <id>", "Filter by clusterId")
+  .option("--limit <n>", "Cap number of items shown client-side")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => seoRoadmapCommand(opts));
 
@@ -1218,17 +1464,16 @@ seoRoadmap
 
 seoRoadmap
   .command("edit <id>")
-  .description("Edit a roadmap item's title, status, or priority.")
+  .description("Update a roadmap item's action or status.")
   .option("--brand <id>")
-  .option("--title <title>", "New title")
-  .option("--status <status>", "New status (e.g. active, paused, done)")
-  .option("--priority <n>", "Priority score (integer)")
+  .option("--action <action>", "Action: ignore|restore|start|complete")
+  .option("--status <status>", "Status: suggested|ignored|in_progress|completed")
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => seoRoadmapEditCommand(id, opts));
 
 seoRoadmap
   .command("delete <id>")
-  .description("Permanently delete a roadmap item.")
+  .description("Soft-delete a roadmap item (sets status to ignored).")
   .option("--brand <id>")
   .option("--destructive", "Required confirmation flag")
   .option("--json", "Emit raw JSON payload")
@@ -1236,22 +1481,161 @@ seoRoadmap
 
 const seoClusters = seo
   .command("clusters")
-  .description("View SEO keyword clusters.");
+  .description("Manage SEO keyword clusters (list, approve, reject, restore).");
 
 seoClusters
   .command("list")
-  .description("List all clusters for the active brand.")
+  .description("List all clusters with status and brief counts.")
   .option("--brand <id>")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => seoClustersListCommand(opts));
 
-seo
-  .command("write")
-  .description("Generate articles from roadmap items.")
+seoClusters
+  .command("generate")
+  .description("Generate clusters from brand keywords, or import + cluster keywords from a CSV. Async.")
   .option("--brand <id>")
-  .requiredOption("--roadmap-id <id>", "Roadmap item ID")
-  .option("--count <n>", "Number of articles", "1")
-  .action((opts) => seoWriteCommand(opts));
+  .option("--csv <file>", "CSV file with keyword rows (required columns: keyword; optional: volume, kd, intent)")
+  .option("--target-size <n>", "Target keywords per cluster")
+  .option("--min-per-cluster <n>", "Minimum keywords per cluster")
+  .option("--max-per-cluster <n>", "Maximum keywords per cluster")
+  .option("--no-cannibal-check", "Skip cannibalization check")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoClustersGenerateCommand(opts));
+
+seoClusters
+  .command("approve <id>")
+  .description("Approve a cluster and trigger brief generation (L3). Async.")
+  .option("--brand <id>")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoClustersApproveCommand(id, opts));
+
+seoClusters
+  .command("unapprove <id>")
+  .description("Revert a cluster to pending_review (fails with 409 if briefs already exist).")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoClustersUnapproveCommand(id, opts));
+
+seoClusters
+  .command("reject <id>")
+  .description("Reject a cluster.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoClustersRejectCommand(id, opts));
+
+seoClusters
+  .command("restore <id>")
+  .description("Restore a rejected cluster back to pending_review.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoClustersRestoreCommand(id, opts));
+
+seoClusters
+  .command("bulk-approve <ids...>")
+  .description("Approve multiple clusters and trigger brief generation for each. Async.")
+  .option("--brand <id>")
+  .option("--wait", "Poll all resulting operations to completion")
+  .option("--json", "Emit raw JSON payload")
+  .action((ids, opts) => seoClustersBulkApproveCommand(ids, opts));
+
+seoClusters
+  .command("bulk-reject <ids...>")
+  .description("Reject multiple clusters in one call.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((ids, opts) => seoClustersBulkRejectCommand(ids, opts));
+
+const seoBriefs = seo
+  .command("briefs")
+  .description("Manage SEO briefs (list, view, generate, approve, reject).");
+
+seoBriefs
+  .command("list")
+  .description("List briefs with optional filters.")
+  .option("--brand <id>")
+  .option("--status <csv>", "Filter by status (csv)")
+  .option("--type <csv>", "Filter by type (csv)")
+  .option("--cluster <id>", "Filter by clusterId")
+  .option("--limit <n>", "Max results")
+  .option("--cursor <cursor>", "Pagination cursor")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoBriefsListCommand(opts));
+
+seoBriefs
+  .command("view <briefId>")
+  .description("View a single brief by ID.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((briefId, opts) => seoBriefsViewCommand(briefId, opts));
+
+seoBriefs
+  .command("generate")
+  .description("Generate briefs (L3) over approved clusters. Optional --cluster <id> to restrict. Async.")
+  .option("--brand <id>")
+  .option("--cluster <id>", "Restrict to a specific cluster (repeatable)", (v: string, acc: string[]) => acc.concat(v), [] as string[])
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoBriefsGenerateCommand(opts));
+
+seoBriefs
+  .command("generate-one")
+  .description("Generate a single brief from supplied pillar + supporting keywords. Async.")
+  .option("--brand <id>")
+  .requiredOption("--pillar <keyword>", "Pillar (primary) keyword")
+  .requiredOption("--supporting <list>", "Comma-separated supporting keywords")
+  .requiredOption("--type <type>", "Brief type: blog|comparison|tool|landing")
+  .option("--intent <s>", "Intent hint (informational, commercial, etc.)")
+  .option("--research <mode>", "Research mode: advanced (default) | fast", "advanced")
+  .option("--tier <tier>", "Content tier: hub|spoke|side_page")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoBriefsGenerateOneCommand(opts));
+
+seoBriefs
+  .command("regenerate <briefId>")
+  .description("Regenerate a brief. Async.")
+  .option("--brand <id>")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((briefId, opts) => seoBriefsRegenerateCommand(briefId, opts));
+
+seoBriefs
+  .command("approve <briefId>")
+  .description("Approve a brief and trigger article generation (L4). Async.")
+  .option("--brand <id>")
+  .option("--hero-image", "Generate a hero image for the article")
+  .option("--voice <id>", "Voice profile ID to use")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((briefId, opts) => seoBriefsApproveCommand(briefId, opts));
+
+seoBriefs
+  .command("reject <briefId>")
+  .description("Reject a brief.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((briefId, opts) => seoBriefsRejectCommand(briefId, opts));
+
+seoBriefs
+  .command("bulk-approve <ids...>")
+  .description("Bulk-approve briefs and trigger article generation for each. Async.")
+  .option("--brand <id>")
+  .option("--hero-image", "Generate hero images for articles")
+  .option("--wait", "Poll all resulting operations to completion")
+  .option("--json", "Emit raw JSON payload")
+  .action((ids, opts) => seoBriefsBulkApproveCommand(ids, opts));
+
+seo
+  .command("write <roadmapId>")
+  .description("Generate the article for a roadmap item (requires an approved brief) (L4). Async.")
+  .option("--brand <id>")
+  .option("--hero-image", "Generate a hero image for the article")
+  .option("--voice <id>", "Voice profile ID to use")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((roadmapId, opts) => seoWriteCommand(roadmapId, opts));
 
 seo
   .command("gap")
@@ -1283,6 +1667,40 @@ seo
   .option("--brand <id>")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => seoStatsCommand(opts));
+
+seo
+  .command("link-health")
+  .description("Show the SEO link health report for the brand.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoLinkHealthCommand(opts));
+
+const seoMarket = seo
+  .command("market")
+  .description(
+    "Read the brand's configured SEO markets — the (location, language) pairs keyword research pulls\n" +
+    "from. A language with zero configured markets can't be researched: run this before\n" +
+    "'seo research-cost <language>' / 'seo generate --language <language>'. Requires a paid plan.\n" +
+    MARKET_HELP
+  )
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoMarketCommand(opts));
+
+seoMarket
+  .command("set")
+  .description(
+    "Configure the brand's SEO markets (up to 3 curated (location, language) pairs). `languageCode` on\n" +
+    "each pair is DataForSEO's vocabulary, NOT PostKing's content-language codes (e.g. Brazil is \"pt\",\n" +
+    "never \"pt-BR\") — this command only accepts the curated codes below, so that distinction is handled\n" +
+    "for you. Requires a paid plan.\n" +
+    MARKET_HELP
+  )
+  .option("--brand <id>")
+  .option("--markets <codes>", `Comma-separated curated codes, 1-3, e.g. --markets DE,FR (${CURATED_MARKET_CODES.join(", ")})`)
+  .option("--global", "Revert to the default Global market (US/en)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoMarketSetCommand(opts));
 
 // ─── visuals ─────────────────────────────────────────────────────────────────
 const visuals = program
@@ -1511,5 +1929,71 @@ social
   .description("Generate a magic link pre-targeted to a specific platform's OAuth.")
   .requiredOption("--platform <platform>", "linkedin | x | instagram | threads | facebook")
   .action((opts) => socialConnectPlatformCommand(opts));
+
+// ─── competitors ─────────────────────────────────────────────────────────────
+const competitors = program
+  .command("competitors")
+  .description("Manage competitor onboarding and analysis for the active brand.");
+
+competitors
+  .command("list")
+  .description("List all onboarded competitors and their analysis state.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsListCommand(opts));
+
+competitors
+  .command("add <domains...>")
+  .description("Add one or more competitor domains (1-20) and start analysis. Async.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((domains, opts) => competitorsAddCommand(domains, opts));
+
+competitors
+  .command("import")
+  .description("Bulk-import competitor domains from a file (newline- or comma-separated, max 20). Async.")
+  .requiredOption("--file <path>", "Path to file containing domains (one per line or comma-separated)")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsImportCommand(opts));
+
+competitors
+  .command("delete <id>")
+  .description("Remove a competitor by ID. Requires --destructive.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--destructive", "Required confirmation flag")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => competitorsDeleteCommand(id, opts));
+
+competitors
+  .command("refresh")
+  .description("Re-analyze all competitors (charges credits per competitor). Async.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsRefreshCommand(opts));
+
+const competitorsComparison = competitors
+  .command("comparison")
+  .description("Show the brand vs. competitors comparison report.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsComparisonCommand(opts));
+
+competitorsComparison
+  .command("recompute")
+  .description("Recompute the comparison report synchronously.")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsComparisonRecomputeCommand(opts));
+
+competitors
+  .command("sample")
+  .description("Show a sample competitor card (useful before adding real competitors).")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => competitorsSampleCommand(opts));
 
 program.parse(process.argv);

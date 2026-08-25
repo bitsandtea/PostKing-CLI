@@ -2,6 +2,8 @@ import { createClient } from "../client";
 import { getApiUrl, getBrandId } from "../config";
 import { printWebUrl } from "../output";
 import { extractApiError } from "../api-error";
+import { printNextStep } from "../lib/onboardChain";
+import { tickLine } from "../lib/ttyOutput";
 
 interface Brand {
   id: string;
@@ -41,10 +43,7 @@ export async function brandThemesCommand(options: { json?: boolean } = {}): Prom
       console.log(`${i + 1}. [${t.id}] ${t.title.toUpperCase()} [${t.intent || "general"}]`);
       console.log(`   ${t.content}\n`);
     });
-    console.log("Next step:  pking voice brand list           (review voice profiles — optional)");
-    console.log("Then:       pking brand visual set           (logo + colors)");
-    console.log("Then:       pking brand smart-week           (generate this week's content)");
-    console.log("Finally:    pking brand finalize             (mark onboarding complete)\n");
+    printNextStep("themes");
     printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}/themes` });
   } catch (err: unknown) {
     process.exit(1);
@@ -147,7 +146,7 @@ export async function brandThemesGenerateCommand(options: { count?: string; inst
       const statusRes = await client.get(`/api/agent/v1/brands/${brandId}/status`);
       const { status, phase, themesCount, operationId: currentOperationId } = statusRes.data;
 
-      process.stdout.write(`\r[Attempt ${attempts}] Status: ${status} | Phase: ${phase} | Themes: ${themesCount}   `);
+      tickLine(`[Attempt ${attempts}] Status: ${status} | Phase: ${phase} | Themes: ${themesCount}   `);
 
       // ONLY proceed if the status is "completed" AND for our target operation
       const isCorrectLegacyOp = !targetOperationId && status === "completed";

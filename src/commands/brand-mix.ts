@@ -1,6 +1,7 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { extractApiError } from "../api-error";
+import { printNextStep } from "../lib/onboardChain";
 
 interface IntentMix {
   educate: number;
@@ -81,7 +82,7 @@ async function promptAcceptMixChoice(): Promise<"accept" | "edit" | "reject"> {
 
 export async function brandMixCommand(
   brandIdArg: string | undefined,
-  options: { json?: boolean; set?: string }
+  options: { json?: boolean; set?: string; yes?: boolean }
 ): Promise<void> {
   const client = createClient();
   const brandId = brandIdArg || getBrandId();
@@ -112,11 +113,7 @@ export async function brandMixCommand(
         // Re-fetch + display
         const after = await client.get(`/api/agent/v1/brands/${brandId}/content-mix`);
         renderMix(after.data as ContentMixResponse);
-        console.log("Next step:  pking brand themes\n");
-    console.log("Then:       pking voice brand list              (review voice profiles — optional)");
-    console.log("Then:       pking brand visual set              (logo + colors)");
-    console.log("Then:       pking brand smart-week              (generate this week's content)");
-    console.log("Finally:    pking brand finalize                (mark onboarding complete)\n");
+        printNextStep("mix");
       }
       return;
     } catch (err) {
@@ -143,6 +140,30 @@ export async function brandMixCommand(
 
   renderMix(res);
 
+  // --yes: accept the current or default mix without prompting.
+  if (options.yes) {
+    const { mix, source } = resolveMix(res);
+    if (!mix) {
+      console.error("ERROR: --yes requires an existing or default mix from the server, but none was returned. Pass --set <json> explicitly.");
+      process.exit(1);
+    }
+    if (source === "default") {
+      try {
+        await client.patch(`/api/agent/v1/brands/${brandId}/content-mix`, {
+          intentMix: res.defaults.intentMix,
+        });
+      } catch (err) {
+        console.error(`\nERROR: Could not save mix: ${extractApiError(err)}`);
+        process.exit(1);
+      }
+      console.log("SUCCESS: Default mix saved to brand.\n");
+    } else {
+      console.log("SUCCESS: Mix accepted as-is (no changes saved).\n");
+    }
+    printNextStep("mix");
+    return;
+  }
+
   const choice = await promptAcceptMixChoice();
   if (choice === "accept") {
     const { source } = resolveMix(res);
@@ -160,11 +181,7 @@ export async function brandMixCommand(
     } else {
       console.log("SUCCESS: Mix accepted as-is (no changes saved).\n");
     }
-    console.log("Next step:  pking brand themes\n");
-    console.log("Then:       pking voice brand list              (review voice profiles — optional)");
-    console.log("Then:       pking brand visual set              (logo + colors)");
-    console.log("Then:       pking brand smart-week              (generate this week's content)");
-    console.log("Finally:    pking brand finalize                (mark onboarding complete)\n");
+    printNextStep("mix");
     return;
   }
   if (choice === "edit") {

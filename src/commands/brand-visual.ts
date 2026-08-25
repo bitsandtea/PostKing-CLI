@@ -17,6 +17,7 @@ import path from "path";
 import { extractApiError } from "../api-error";
 import { createClient } from "../client";
 import { getApiUrl, getBrandId } from "../config";
+import { printNextStep } from "../lib/onboardChain";
 import { printWebUrl } from "../output";
 
 interface BrandVisualSetOptions {
@@ -119,9 +120,7 @@ export async function brandVisualSetCommand(
       if (fonts.primary) console.log(`  primary:   ${fonts.primary}`);
       if (fonts.secondary) console.log(`  secondary: ${fonts.secondary}`);
     }
-    console.log("\nNext step:  pking brand visual import-assets --urls <csv>");
-    console.log("Then:       pking brand smart-week [brandId] --yes");
-    console.log("Finally:    pking brand finalize [brandId]");
+    printNextStep("visual");
     printWebUrl({ webUrl: `${getApiUrl()}/dashboard/brands/${brandId}/visual-identity` });
   } catch (err) {
     console.error(`\nERROR: ${extractApiError(err)}`);
@@ -217,8 +216,7 @@ export async function brandVisualImportAssetsCommand(
         console.log(`  - ${row.url}  (${row.error || "unknown error"})`);
       }
     }
-    console.log("\nNext step:  pking brand smart-week [brandId] --yes");
-    console.log("Then:       pking brand finalize [brandId]");
+    printNextStep("visual");
   } catch (err) {
     console.error(`\nERROR: ${extractApiError(err)}`);
     process.exit(1);
