@@ -588,7 +588,10 @@ export async function postsGenerateBatchCommand(options: {
   const customLimit = isCustomLength ? parseInt(platform.split(":")[1], 10) : undefined;
 
   try {
-    const res = await client.post(`/api/brands/${brandId}/generate-batch`, {
+    // Routed through agent-v1 (scope + rate limit + audit) instead of the
+    // dashboard-inner route — makeProxy forwards the inner handler's response
+    // verbatim, so res.data.message keeps working unchanged.
+    const res = await client.post(`/api/agent/v1/brands/${brandId}/posts/generate-batch`, {
       medium: isCustomLength ? "custom" : options.platform,
       customCharLimit: customLimit,
       frequency: options.frequency,
