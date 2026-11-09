@@ -33,7 +33,7 @@
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=18"
   },
   "keywords": [
     "postking",

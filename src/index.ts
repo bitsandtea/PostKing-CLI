@@ -3,8 +3,8 @@
 import { Command } from "commander";
 import { LANGUAGE_FLAG_DESCRIPTION, SUPPORTED_LANGUAGE_CODES } from "./constants";
 import { loginWithPasswordCommand, meCommand, registerCommand } from "./commands/auth";
-import { authorsCreateCommand, authorsListCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
-import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
+import { authorsSetDefaultCommand, authorsCreateCommand, authorsGenerateCommand, authorsListCommand, authorsUpdateCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
+import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsRefreshCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
 import { jobsListCommand } from "./commands/jobs";
 import { brandCreateCommand, brandDeleteCommand, brandFinalizeCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand } from "./commands/brand";
 import { brandMixCommand } from "./commands/brand-mix";
@@ -21,9 +21,11 @@ import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } fro
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
 import { loginCommand } from "./commands/login";
 import { loginStartCommand, loginFinishCommand, registerStartCommand, registerFinishCommand, resendCommand, resetPasswordCommand, resetPasswordFinishCommand } from "./commands/auth-device";
+import { articlesGenerateCommand, articlesGetCommand, articlesImageCommand, articlesImagesCommand, articlesListCommand, articlesUpdateCommand } from "./commands/articles";
 import { redditPoolCommand, redditRewriteCommand } from "./commands/reddit";
 import { logoutCommand } from "./commands/logout";
 import {
+  lpConnectDomainCommand,
   lpDeleteCommand,
   lpDraftViewCommand,
   lpEditCommand,
@@ -32,6 +34,7 @@ import {
   lpPublishCommand,
   lpRegenerateCommand,
   lpSetCommand,
+  lpSetDistributionCommand,
   lpSideDeleteCommand,
   lpSideEditCommand,
   lpSideGenerateWithWaitCommand,
@@ -48,10 +51,11 @@ import {
   lpVibeStatusCommand,
   lpViewCommand,
 } from "./commands/lp";
+import { lpImportBundleCommand } from "./commands/lpImportBundle";
 import { postsApproveCommand, postsCalendarCommand, postsCancelCommand, postsCreateCommand, postsDeleteCommand, postsGenerateBatchCommand, postsGenerateCommand, postsListCommand, postsRescheduleCommand, postsScheduleCommand, postsViewCommand } from "./commands/posts";
-import { publicationsCreateCommand, publicationsListCommand } from "./commands/publications";
+import { publicationsCreateCommand, publicationsListCommand, publicationsSetHostingCommand } from "./commands/publications";
 import { repurposeCommand } from "./commands/repurpose";
-import { seoBriefsApproveCommand, seoBriefsBulkApproveCommand, seoBriefsGenerateCommand, seoBriefsGenerateOneCommand, seoBriefsListCommand, seoBriefsRegenerateCommand, seoBriefsRejectCommand, seoBriefsViewCommand, seoCategorizeCommand, seoClusterCommand, seoClustersApproveCommand, seoClustersBulkApproveCommand, seoClustersBulkRejectCommand, seoClustersGenerateCommand, seoClustersListCommand, seoClustersRejectCommand, seoClustersRestoreCommand, seoClustersUnapproveCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoKeywordsDeleteCommand, seoKeywordsEditCommand, seoKeywordsListCommand, seoLinkHealthCommand, seoMarketCommand, seoMarketSetCommand, CURATED_MARKET_CODES, MARKET_HELP, seoPublishCommand, seoResearchEstimateCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
+import { seoBriefsApproveCommand, seoBriefsBulkApproveCommand, seoBriefsGenerateCommand, seoBriefsGenerateOneCommand, seoBriefsListCommand, seoBriefsRegenerateCommand, seoBriefsRejectCommand, seoBriefsViewCommand, seoCannibalizationReportCommand, seoCategorizeCommand, seoCheckCannibalizationCommand, seoClusterCommand, seoClustersApproveCommand, seoClustersBulkApproveCommand, seoClustersBulkRejectCommand, seoClustersGenerateCommand, seoClustersListCommand, seoClustersRejectCommand, seoClustersRestoreCommand, seoClustersUnapproveCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoKeywordsDeleteCommand, seoKeywordsEditCommand, seoKeywordsListCommand, seoLinkHealthCommand, seoMarketCommand, seoMarketSetCommand, CURATED_MARKET_CODES, MARKET_HELP, seoPublishCommand, seoResearchEstimateCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSearchDataCommand, seoSearchDataReconcileCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
 import { competitorsAddCommand, competitorsComparisonCommand, competitorsComparisonRecomputeCommand, competitorsDeleteCommand, competitorsImportCommand, competitorsListCommand, competitorsRefreshCommand, competitorsSampleCommand } from "./commands/competitors";
 import { socialConnectPlatformCommand } from "./commands/social-extra";
 import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } from "./commands/social";
@@ -59,6 +63,26 @@ import { userCreditsCommand } from "./commands/user";
 import { billingPacksCommand, billingTopupCommand, billingWalletCommand, billingTiersCommand, billingSubscribeCommand } from "./commands/billing";
 import { voiceBrandDeleteCommand, voiceBrandListCommand, voiceBrandUpdateCommand, voiceListCommand, voiceRewriteCommand } from "./commands/voice";
 import { trendsListCommand } from "./commands/trends";
+import {
+  searchPerformanceAiCitationsCommand,
+  searchPerformanceAiVisibilityCommand,
+  searchPerformanceOverviewCommand,
+  searchPerformancePageJourneyCommand,
+  searchPerformanceSourcesCommand,
+  searchPerformanceWorklistCommand,
+} from "./commands/search-performance";
+import {
+  toolsCreateCommand,
+  toolsDeleteCommand,
+  toolsGenerateCommand,
+  toolsGetCommand,
+  toolsLeadsCommand,
+  toolsListCommand,
+  toolsPreviewCommand,
+  toolsPublishCommand,
+  toolsRunsCommand,
+  toolsUpdateCommand,
+} from "./commands/tools";
 import { runUpdateCheck } from "./update-check";
 import {
   visualsCardsEditCommand,
@@ -1030,6 +1054,8 @@ blogs
   .option("--wait", "Block and poll until the article is ready")
   .option("--timeout <seconds>", "Max seconds to wait when --wait is set", "600")
   .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
+  .option("--author <id>", "Author ID (default: publication default, then brand default, then oldest active author)")
+  .option("--force", "Bypass the cannibalization guard and generate anyway")
   .action((opts) => blogsGenerateCommand(opts));
 
 blogs
@@ -1055,6 +1081,16 @@ blogs
   .description("Delete a blog article.")
   .action((id) => blogsDeleteCommand(id));
 
+blogs
+  .command("refresh <blogId>")
+  .description("Re-run the writer pipeline against an existing article in place, instead of creating a duplicate. Async.")
+  .option("--brief-id <id>", "Brief ID to refresh from")
+  .option("--topic <topic>", "New topic or working title")
+  .option("--instructions <text>", "Free-form instructions for the refresh")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => blogsRefreshCommand(id, opts));
+
 // ─── jobs ────────────────────────────────────────────────────────────────────
 const jobs = program.command("jobs").description("Inspect async background jobs (blog generation, etc.).");
 jobs
@@ -1064,6 +1100,66 @@ jobs
   .option("--limit <n>", "Max rows (default 50)")
   .option("--json", "Output raw JSON")
   .action((opts) => jobsListCommand(opts));
+
+// ─── articles (LinkedIn / X long-form) ───────────────────────────────────────
+const articles = program.command("articles").description("LinkedIn + X long-form articles (copy-and-paste kit; no publishing API).");
+
+articles
+  .command("generate")
+  .description("Generate a LinkedIn (Pulse) or X article text only (25 credits); add images with `articles images` (30 each). A --blog source is research input only.")
+  .requiredOption("--platform <linkedin|x>", "Target platform")
+  .option("--topic <text>", "What the article is about")
+  .option("--blog <articleId>", "Blog article used as research input only (written fresh, never rewritten)")
+  .option("--brief <briefId>", "SEO brief to guide the article")
+  .option("--keyword <keyword>", "LinkedIn only: keyword front-loaded in the title")
+  .option("--voice <voiceId>", "Voice profile ID")
+  .option("--images <n>", "Inline images, 2-5 (default 3)")
+  .option("--language <code>", LANGUAGE_FLAG_DESCRIPTION)
+  .option("--wait", "Block and poll until the article is ready")
+  .option("--json", "Output raw JSON")
+  .action((opts) => articlesGenerateCommand(opts));
+
+articles
+  .command("list")
+  .description("List LinkedIn/X articles.")
+  .option("--platform <linkedin|x>", "Filter by platform")
+  .option("--status <status>", "generating | draft | ready | published | failed")
+  .option("--json", "Output raw JSON")
+  .action((opts) => articlesListCommand(opts));
+
+articles
+  .command("get <articleId>")
+  .description("Show an article and its image URLs.")
+  .option("--markdown", "Print title + body as markdown with [Image N] markers")
+  .option("--save-images <dir>", "Download the cover and inline images into a directory")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => articlesGetCommand(id, opts));
+
+articles
+  .command("image <articleId>")
+  .description("Generate or regenerate ONE image (30 credits). Marker 0 is the cover.")
+  .requiredOption("--marker <n>", "0 = cover, 1..N = inline image")
+  .option("--prompt <text>", "Creative direction for the image")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => articlesImageCommand(id, opts));
+
+articles
+  .command("images <articleId>")
+  .description("Generate every empty image slot (30 credits each).")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => articlesImagesCommand(id, opts));
+
+articles
+  .command("update <articleId>")
+  .description("Edit an article, or record the live URL after pasting it (--published-url marks it published).")
+  .option("--published-url <url>", "Live LinkedIn/X URL")
+  .option("--title <text>", "Title")
+  .option("--subtitle <text>", "Subtitle")
+  .option("--teaser <text>", "Teaser post")
+  .option("--keyword <keyword>", "Target keyword")
+  .option("--status <draft|ready|published>", "Status")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => articlesUpdateCommand(id, opts));
 
 // ─── reddit ──────────────────────────────────────────────────────────────────
 const reddit = program.command("reddit").description("Test the Reddit rewrite feature end-to-end (rewrite content for a subreddit, inspect the pooled subreddit list).");
@@ -1109,6 +1205,21 @@ publications
     "'pking brand languages --add <code>'."
   )
   .action((opts) => publicationsCreateCommand(opts));
+publications
+  .command("set-hosting <publicationId> <hostingMode>")
+  .description(
+    "Set whether a blog publication is served by PostKing ('postking', default) or by the customer's own app ('self_hosted' — " +
+      "they render it against the public /api/blog-posts?blogId=<publicationId> API; optional example: https://github.com/bitsandtea/postking-selfhost). " +
+      "The connected domain's hostingMode must match the publication's, or this 409s. hostingMode must be 'postking' or 'self_hosted'."
+  )
+  .option("--json", "Output raw JSON")
+  .action((publicationId, hostingMode, opts) => {
+    if (hostingMode !== "postking" && hostingMode !== "self_hosted") {
+      console.error("ERROR: hostingMode must be 'postking' or 'self_hosted'.");
+      process.exit(1);
+    }
+    return publicationsSetHostingCommand(publicationId, hostingMode, opts);
+  });
 
 const authors = program.command("authors").description("Manage blog authors.");
 authors.command("list").option("--json", "Output raw JSON").action((opts) => authorsListCommand(opts));
@@ -1122,6 +1233,34 @@ authors
     lastName: opts.lastName,
     email: opts.email,
   }));
+authors
+  .command("update")
+  .description("Partial update: only the flags you pass change.")
+  .requiredOption("--id <authorId>")
+  .option("--first-name <name>")
+  .option("--last-name <name>")
+  .option("--email <email>")
+  .option("--url <url>")
+  .option("--about <bio>")
+  .option("--linkedin <url>")
+  .option("--twitter <url>")
+  .option("--youtube <url>")
+  .option("--website <url>")
+  .option("--avatar <url>")
+  .action((opts) => authorsUpdateCommand(opts));
+authors
+  .command("set-default")
+  .description("Set the default author for new articles (brand-wide, or one publication with --publication). Use --clear to unset.")
+  .argument("[authorId]", "Author ID (omit with --clear)")
+  .option("--publication <id>", "Set the default for this publication only")
+  .option("--clear", "Clear the default")
+  .action((authorId, opts) => authorsSetDefaultCommand(authorId, opts));
+authors
+  .command("generate")
+  .description("Generate an author persona from brand info and save it.")
+  .option("--language <code>")
+  .option("--preview", "Do not save; print the generated profile")
+  .action((opts) => authorsGenerateCommand(opts));
 
 const categories = program.command("categories").description("Manage blog categories.");
 categories
@@ -1170,6 +1309,33 @@ lp
   .option("--destructive", "Required confirmation flag")
   .option("--json", "Emit raw JSON payload")
   .action((slug, opts) => lpDeleteCommand(slug, opts));
+
+// ─── lp import-bundle (126-bundle-import, Phase 3) ────────────────────────────
+lp
+  .command("import-bundle <folder>")
+  .description(
+    "Import a local static-build folder (index.html + img/fonts/css) as a raw-HTML landing page. " +
+    "Every relative asset path in the folder resolves and gets rehosted — unlike pasting HTML alone. " +
+    "Never follows symlinks; refuses secrets/VCS files (.env, .git/, id_rsa, etc.) and executable/script/archive files outright."
+  )
+  .option("--name <name>", "Display name for the new landing page")
+  .option("--entry <path>", "Explicit entry HTML file, relative to the folder (e.g. \"index.html\"). Required when the bundle has multiple ambiguous .html files.")
+  .option("--convert-slug <slug>", "Slug of an EXISTING landing page to overwrite with the imported bundle, instead of creating a new one")
+  .option("--side-pages", "Auto-create side pages from other .html files found in the bundle")
+  .option("--json", "Output raw JSON payload")
+  .action((folder, opts) =>
+    lpImportBundleCommand(folder, {
+      name: opts.name,
+      entry: opts.entry,
+      convertSlug: opts.convertSlug,
+      // Only pass a value when --side-pages was actually set — `!!opts.sidePages`
+      // would coerce commander's `undefined` (flag not passed) into `false`,
+      // which lpImportBundleCommand would then always send as
+      // createMissingSidePages=false instead of omitting the field.
+      sidePages: opts.sidePages ? true : undefined,
+      json: !!opts.json,
+    })
+  );
 
 const lpSide = lp.command("side").description("Manage side-pages of a landing page.");
 lpSide
@@ -1286,6 +1452,35 @@ lp
     json: opts.json as boolean | undefined,
   }));
 
+// ─── lp distribution (hosted vs. self-hosted) ────────────────────────────────
+lp
+  .command("set-distribution <slug> <distribution>")
+  .description(
+    "Set whether a landing page is served by PostKing ('hosted', default) or by the customer's own infra ('self_hosted' — " +
+      "they run their own renderer against the public landing-pages API; optional example: https://github.com/bitsandtea/postking-selfhost). " +
+      "distribution must be 'hosted' or 'self_hosted'."
+  )
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, distribution, opts) => {
+    if (distribution !== "hosted" && distribution !== "self_hosted") {
+      console.error("ERROR: distribution must be 'hosted' or 'self_hosted'.");
+      process.exit(1);
+    }
+    return lpSetDistributionCommand(slug, distribution, opts);
+  });
+
+lp
+  .command("connect-domain <slug>")
+  .description(
+    "Attach an already-verified Domain to a landing page (page must be published; requires paid access). " +
+      "The Domain's hostingMode must match the page's distribution ('postking' <-> 'hosted', 'self_hosted' <-> 'self_hosted') " +
+      "— a mismatch 409s; see 'pking lp set-distribution' / 'pking domains add --hosting-mode'."
+  )
+  .option("--domain-id <id>", "Verified Domain ID (from 'pking domains list'). Preferred over --domain.")
+  .option("--domain <hostname>", "Domain hostname to connect, e.g. example.com — fallback, looked up by name under this brand.")
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, opts) => lpConnectDomainCommand(slug, opts));
+
 // ─── lp versions ─────────────────────────────────────────────────────────────
 const lpVersions = lp
   .command("versions")
@@ -1340,8 +1535,12 @@ lp
 // ─── domains extras (add, delete, connect) ───────────────────────────────────
 domains
   .command("add <domain>")
-  .description("Add a custom domain to the active brand.")
-  .action((d) => domainsAddCommand(d));
+  .description(
+    "Add a custom domain to the active brand. --hosting-mode self_hosted is for a domain the CUSTOMER's own infra serves " +
+      "(e.g. a self-hosted landing page, see 'pking lp set-distribution') — verification is then TXT-ownership only, no A record."
+  )
+  .option("--hosting-mode <mode>", "'postking' (default) or 'self_hosted'")
+  .action((d, opts) => domainsAddCommand(d, opts));
 domains
   .command("delete <id>")
   .description("Remove a domain by ID.")
@@ -1350,6 +1549,8 @@ domains
   .command("connect <id>")
   .description("Connect a verified domain to a landing page or publication.")
   .requiredOption("--target <target>", "e.g. 'lp:my-slug' or 'publication:<id>'")
+  .option("--routing-type <type>", "publication targets only: 'path' (default), 'root', or 'subdomain'")
+  .option("--path-prefix <prefix>", "publication targets with path routing, e.g. '/blog'")
   .action((id, opts) => domainsConnectCommand(id, opts));
 
 // ─── SEO ─────────────────────────────────────────────────────────────────────
@@ -1447,8 +1648,8 @@ const seoRoadmap = seo
   .command("roadmap")
   .description("List roadmap items. Use seo roadmap edit/view/delete for item-level operations.")
   .option("--brand <id>")
-  .option("--status <status>", "Filter by status")
-  .option("--type <type>", "Filter by type")
+  .option("--status <status>", "Filter by status (ignored lists items the search-data reconcile hid as covered)")
+  .option("--type <type>", "Filter by type: blog_article|side_page|tool|refresh (refresh = rewrite of an existing page)")
   .option("--priority <value>", "Filter by priority")
   .option("--cluster <id>", "Filter by clusterId")
   .option("--limit <n>", "Cap number of items shown client-side")
@@ -1466,8 +1667,9 @@ seoRoadmap
   .command("edit <id>")
   .description("Update a roadmap item's action or status.")
   .option("--brand <id>")
-  .option("--action <action>", "Action: ignore|restore|start|complete")
+  .option("--action <action>", "Action: ignore|restore|start|complete|pin|unpin|remove (restore = un-hide and keep visible, hidden/ignored items only (409 otherwise); pin = reconcile won't re-rank; remove = hide, never re-create; start on a refresh item rewrites its existing page)")
   .option("--status <status>", "Status: suggested|ignored|in_progress|completed")
+  .option("--no-wait", "For a refresh item's start: print operationId and return without polling")
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => seoRoadmapEditCommand(id, opts));
 
@@ -1633,9 +1835,31 @@ seo
   .option("--brand <id>")
   .option("--hero-image", "Generate a hero image for the article")
   .option("--voice <id>", "Voice profile ID to use")
+  .option("--author <id>", "Author ID (default: publication default, then brand default, then oldest active author)")
   .option("--no-wait", "Print operationId and return without polling")
+  .option("--force", "Bypass the cannibalization guard and write anyway")
   .option("--json", "Emit raw JSON payload")
   .action((roadmapId, opts) => seoWriteCommand(roadmapId, opts));
+
+seo
+  .command("cannibalization-report")
+  .description("Audit published articles for duplicate/overlapping content and propose a canonical winner per group. Read-only.")
+  .option("--brand <id>")
+  .option("--language <code>", "Filter to one language code")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoCannibalizationReportCommand(opts));
+
+seo
+  .command("check-cannibalization")
+  .description("Preflight check: would writing an article on this title/keyword collide with an existing article or in-flight brief? Read-only.")
+  .requiredOption("--title <title>", "Working title of the article")
+  .requiredOption("--primary-keyword <keyword>", "Primary target keyword")
+  .option("--brand <id>")
+  .option("--language-code <code>", "Language code to check against")
+  .option("--brief-id <id>", "Brief ID this check is on behalf of")
+  .option("--exact-only", "Only match on exact keyword/slug, skip fuzzy similarity")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoCheckCannibalizationCommand(opts));
 
 seo
   .command("gap")
@@ -1667,6 +1891,20 @@ seo
   .option("--brand <id>")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => seoStatsCommand(opts));
+
+const seoSearchData = seo
+  .command("search-data")
+  .description("Search Console / Bing connected? Last roadmap reconcile and refresh/hidden counts.")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoSearchDataCommand(opts));
+
+seoSearchData
+  .command("reconcile")
+  .description("Re-run the search-data roadmap reconcile now (async: re-ranks suggestions, hides covered items, adds refresh items). Poll with: seo search-data")
+  .option("--brand <id>")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => seoSearchDataReconcileCommand(opts));
 
 seo
   .command("link-health")
@@ -1995,5 +2233,208 @@ competitors
   .option("--brand <id>", "Brand id (defaults to active brand)")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => competitorsSampleCommand(opts));
+
+// ─── search-performance ────────────────────────────────────────────────────
+const searchPerformance = program
+  .command("search-performance")
+  .description(
+    "Search Console + Bing Webmaster + GA4 + AI-visibility reporting for the active brand."
+  );
+
+searchPerformance
+  .command("overview")
+  .description(
+    "Summary totals, top queries, and top pages across connected search sources.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-performance"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--days <n>", "7 | 28 | 90 | 180 | 480 (default: 90)")
+  .option("--provider <provider>", "google_search_console | bing_webmaster | google_analytics")
+  .option("--origin <origin>", "POSTKING | POSTKING_EXTERNAL | IMPORTED | EXTERNAL")
+  .option("--limit <n>", "Max rows to show per table (default: 10)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformanceOverviewCommand(opts));
+
+searchPerformance
+  .command("ai-visibility")
+  .description(
+    "Coverage/share readout across AI engines (Deep AI Dive) — ASCII bars per engine/topic plus outreach targets.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-performance/ai-visibility"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--days <n>", "7 | 28 | 90 | 180 | 480 (default: 90)")
+  .option("--market <market>", "Market key to scope the readout to (unknown values degrade to empty, not an error)")
+  .option("--limit <n>", "Max rows to show per table (default: 10)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformanceAiVisibilityCommand(opts));
+
+searchPerformance
+  .command("ai-citations")
+  .description(
+    "Cited pages and queries from the Bing Copilot 'AI Performance' CSV import.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-performance/ai-citations"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--limit <n>", "Max rows to show per table (default: 10)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformanceAiCitationsCommand(opts));
+
+searchPerformance
+  .command("worklist")
+  .description(
+    "Ranked 'Do this next' SEO + GEO actions with evidence.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-performance/worklist"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--days <n>", "7 | 28 | 90 | 180 | 480 (default: 90)")
+  .option("--limit <n>", "Max items to show (default: 10)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformanceWorklistCommand(opts));
+
+searchPerformance
+  .command("page-journey")
+  .description(
+    "What visitors do on a page after they land: suggestions for what to change, drop-off by section, button click rates.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-performance/page-journey"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--host <host>", "Host of the page (default: most-visited page)")
+  .option("--path <path>", "Path of the page, e.g. /pricing (default: most-visited page)")
+  .option("--days <n>", "1-365 (default: 28)")
+  .option("--limit <n>", "Max rows to show per table (default: 10)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformancePageJourneyCommand(opts));
+
+searchPerformance
+  .command("sources")
+  .description(
+    "List connected search sources (Google Search Console, Bing Webmaster, Google Analytics) and their status.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/search-sources"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => searchPerformanceSourcesCommand(opts));
+
+// ─── tools ──────────────────────────────────────────────────────────────────
+const tools = program
+  .command("tools")
+  .description(
+    "Brand Tools — form pages at {brand domain}/tools/{slug} that collect visitor\n" +
+    "input, optionally forward it to your own backend, render a templated HTML\n" +
+    "result, and hand the visitor off to your site."
+  );
+
+tools
+  .command("list")
+  .description("List tools for the active brand.\nWraps GET /api/agent/v1/brands/{brandId}/tools")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => toolsListCommand(opts));
+
+tools
+  .command("get <toolId>")
+  .description("Show a single tool's full configuration.\nWraps GET /api/agent/v1/brands/{brandId}/tools/{toolId}")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsGetCommand(id, opts));
+
+tools
+  .command("create")
+  .description(
+    "Create a tool from a JSON body file (name/slug required).\n" +
+    "Body may set layout (\"split\"|\"video\"|\"product\", default \"split\") and layoutConfig\n" +
+    "(layout-specific page content — see the SKILL.md tool-page section for the field list).\n" +
+    "\"video\" layout requires layoutConfig.videoUrl before the tool can publish; \"product\"\n" +
+    "renders exactly one input field. Also accepts failureMessage and usageCountStart.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/tools"
+  )
+  .requiredOption("--file <path>", "Path to a JSON file with the tool body")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => toolsCreateCommand(opts));
+
+tools
+  .command("generate")
+  .description(
+    "AI-draft a tool from a plain-language description. Async — returns an\n" +
+    "operationId; poll with 'pking jobs list'.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/tools/generate"
+  )
+  .requiredOption("--description <text>", "What the tool should do")
+  .requiredOption("--endpoint-url <url>", "The backend endpoint the tool will call")
+  .requiredOption(
+    "--inputs-outputs <text>",
+    "Plain-language description of the form fields and what the endpoint returns"
+  )
+  .option("--endpoint-method <method>", "GET | POST")
+  .option("--api-key <key>", "Bearer token sent to endpointUrl")
+  .option(
+    "--sample-output-file <path>",
+    "Path to a file with a sample of the endpoint's response (best-effort; the agent-v1 schema doesn't declare this field, so it may be silently stripped server-side)"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => toolsGenerateCommand(opts));
+
+tools
+  .command("update <toolId>")
+  .description(
+    "Update a tool from a JSON body file (partial — only supplied fields change).\n" +
+    "Body may set layout (\"split\"|\"video\"|\"product\") and layoutConfig (layout-specific\n" +
+    "page content — see the SKILL.md tool-page section for the field list). \"video\" layout\n" +
+    "requires layoutConfig.videoUrl before the tool can publish; \"product\" renders exactly\n" +
+    "one input field. Also accepts failureMessage and usageCountStart.\n" +
+    "Wraps PATCH /api/agent/v1/brands/{brandId}/tools/{toolId}"
+  )
+  .requiredOption("--file <path>", "Path to a JSON file with the fields to update")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsUpdateCommand(id, opts));
+
+tools
+  .command("publish <toolId>")
+  .description("Publish (or unpublish) a tool.\nWraps POST /api/agent/v1/brands/{brandId}/tools/{toolId}/publish")
+  .option("--unpublish", "Unpublish instead of publish")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsPublishCommand(id, opts));
+
+tools
+  .command("delete <toolId>")
+  .description("Delete a tool.\nWraps DELETE /api/agent/v1/brands/{brandId}/tools/{toolId}")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsDeleteCommand(id, opts));
+
+tools
+  .command("preview <toolId>")
+  .description(
+    "Render a tool's result template against a sample response.\n" +
+    "Wraps POST /api/agent/v1/brands/{brandId}/tools/{toolId}/preview"
+  )
+  .option("--file <path>", "Path to a JSON file to use as sampleResponse")
+  .option("--sample <json>", "Inline JSON string to use as sampleResponse")
+  .option("--sample-inputs <json>", "Inline JSON string to use as sampleInputs")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsPreviewCommand(id, opts));
+
+tools
+  .command("runs <toolId>")
+  .description("List runs for a tool.\nWraps GET /api/agent/v1/brands/{brandId}/tools/{toolId}/runs")
+  .option("--page <n>", "Page number (default: 1)")
+  .option("--limit <n>", "Rows per page")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsRunsCommand(id, opts));
+
+tools
+  .command("leads <toolId>")
+  .description("List leads captured by a tool.\nWraps GET /api/agent/v1/brands/{brandId}/tools/{toolId}/leads")
+  .option("--limit <n>", "Max rows to return")
+  .option("--cursor <id>", "Pagination cursor from a previous call's nextCursor")
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => toolsLeadsCommand(id, opts));
 
 program.parse(process.argv);

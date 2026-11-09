@@ -46,6 +46,68 @@ export function getApiErrorEnvelope(
  * it handled (and printed) the error, so the caller can skip its generic
  * `extractApiError` fallback.
  */
+interface CannibalizationGuardMatch {
+  articleId?: string;
+  briefId?: string;
+  title: string;
+  url?: string;
+  slug?: string;
+  status?: string;
+  similarity: number;
+  matchedOn: string;
+  updatedAt?: string;
+  wordCount?: number;
+}
+
+interface CannibalizationGuardOutcome {
+  decision: "create" | "refresh" | "blocked";
+  reason: string;
+  matches: CannibalizationGuardMatch[];
+  targetArticleId?: string;
+  conflictingBriefId?: string;
+  similarity?: number;
+}
+
+/**
+ * Renders the 409 a "write article" (`seo write`) or "generate blog post"
+ * (`blogs generate`) call gets back when the server-side cannibalization
+ * guard (docs/124-cannibalization-guard in the main repo) blocks the write —
+ * agent error `code: "VALIDATION"`, `reason: "cannibalization_guard"`,
+ * `details.cannibalizationGuard` carrying the full outcome. Returns true if
+ * it handled (and printed) the error, so the caller can skip its generic
+ * `extractApiError` fallback and instead point the user at `blog refresh` or
+ * `--force`.
+ */
+export function printCannibalizationGuardError(err: unknown): boolean {
+  const envelope = getApiErrorEnvelope(err);
+  if (!envelope) return false;
+  const details = envelope.details as { cannibalizationGuard?: CannibalizationGuardOutcome } | undefined;
+  const guard = details?.cannibalizationGuard;
+  if (!guard && envelope.reason !== "cannibalization_guard") return false;
+  if (!guard) {
+    console.error(`ERROR: ${(envelope.message as string) ?? "Cannibalization guard blocked this request."}`);
+    return true;
+  }
+
+  const top = guard.matches?.[0];
+  if (guard.decision === "blocked") {
+    console.error(
+      `ERROR: An in-flight brief already covers this keyword — wait for it or edit that brief instead.`
+    );
+    if (guard.conflictingBriefId) console.error(`  Conflicting brief: ${guard.conflictingBriefId}`);
+  } else if (top) {
+    const ref = top.url ?? top.slug ?? top.articleId ?? "(unknown)";
+    const suggestion =
+      guard.decision === "refresh"
+        ? `run \`pking blog refresh ${guard.targetArticleId ?? top.articleId ?? "<blogId>"}\` or pass --force to write anyway`
+        : `pass --force to write anyway`;
+    console.error(`ERROR: An article on this keyword already exists: "${top.title}" (${ref}) — ${suggestion}.`);
+  } else {
+    console.error(`ERROR: ${guard.reason ?? envelope.message ?? "Cannibalization guard blocked this request."}`);
+  }
+  return true;
+}
+
 export function printLanguageGateError(err: unknown, languageCode: string | undefined): boolean {
   if (!languageCode) return false;
   const envelope = getApiErrorEnvelope(err);
@@ -59,4 +121,42 @@ export function printLanguageGateError(err: unknown, languageCode: string | unde
     console.error(`  Hint: enable this language first — 'pking brand languages --add ${languageCode}'.`);
   }
   return true;
+}
+
+/**
+ * Renders the agent-v1 `INSUFFICIENT_CREDITS` (HTTP 402) envelope as CLI lines:
+ * what the action costs, the current balance, how many items would fit, and how
+ * to top up. Returns null when the envelope isn't an insufficient-credits error.
+ * Server contract: docs/134-credit-metering (details: { action, needed, balance,
+ * affordableCount, topUpUrl }).
+ */
+export function formatInsufficientCreditsLines(
+  envelope: Record<string, unknown> | undefined,
+  baseUrl?: string
+): string[] | null {
+  if (!envelope || envelope.code !== "INSUFFICIENT_CREDITS") return null;
+  const details = (envelope.details ?? {}) as {
+    action?: unknown;
+    needed?: unknown;
+    balance?: unknown;
+    affordableCount?: unknown;
+    topUpUrl?: unknown;
+  };
+  const lines = [`ERROR: Not enough credits${typeof envelope.message === "string" && envelope.message ? ` - ${envelope.message}` : "."}`];
+  if (typeof details.needed === "number") {
+    const action = typeof details.action === "string" && details.action ? ` for ${details.action}` : "";
+    const balance = typeof details.balance === "number" ? `, balance ${details.balance}` : "";
+    lines.push(`  Cost: ${details.needed} credits${action}${balance}.`);
+  }
+  if (typeof details.affordableCount === "number" && details.affordableCount > 0) {
+    lines.push(`  Your balance covers ${details.affordableCount} of the requested items - re-run with fewer.`);
+  }
+  const topUp =
+    typeof details.topUpUrl === "string" && details.topUpUrl.startsWith("/") && baseUrl
+      ? `${baseUrl.replace(/\/+$/, "")}${details.topUpUrl}`
+      : typeof details.topUpUrl === "string"
+        ? details.topUpUrl
+        : undefined;
+  lines.push("  Top up: `pking billing packs` then `pking billing topup <packSku>`" + (topUp ? `, or open ${topUp}` : "."));
+  return lines;
 }

@@ -1,8 +1,43 @@
 import { createClient } from "../../client";
 import { printWebUrl } from "../../output";
+import { printCannibalizationGuardError } from "../../api-error";
 import { requireBrand, printError, pollOperation, VALID_ROADMAP_ACTIONS, VALID_ROADMAP_STATUSES } from "./shared";
 
 // ─── seo roadmap ─────────────────────────────────────────────────────────────
+
+export interface RoadmapRow {
+  id: string;
+  title: string;
+  status: string;
+  itemType?: string;
+  primaryKeyword?: string;
+  primaryKeywords?: string[];
+  metadata?: {
+    hiddenReason?: string;
+    searchEvidence?: { impressions?: number; position?: number | null };
+    refresh?: { pageUrl?: string };
+    userOverride?: { pinned?: boolean; restored?: boolean; removed?: boolean };
+  };
+}
+
+/** One roadmap line: search-data fields (refresh page, hidden reason, evidence, overrides) show when present. */
+export function formatRoadmapRow(it: RoadmapRow): string {
+  const kw = it.primaryKeyword ?? it.primaryKeywords?.[0] ?? "";
+  const m = it.metadata ?? {};
+  const tags: string[] = [];
+  if (it.itemType === "refresh") tags.push("refresh");
+  if (m.hiddenReason) tags.push(`hidden: ${m.hiddenReason}`);
+  const ev = m.searchEvidence;
+  if (ev && typeof ev.impressions === "number") {
+    tags.push(`${ev.impressions} impr${typeof ev.position === "number" ? ` @ pos ${ev.position.toFixed(1)}` : ""}`);
+  }
+  const ov = m.userOverride;
+  if (ov?.pinned) tags.push("pinned");
+  if (ov?.restored) tags.push("restored");
+  if (ov?.removed) tags.push("removed");
+  const page = m.refresh?.pageUrl ? `  page=${m.refresh.pageUrl}` : "";
+  return `  ${it.id}  [${it.status}]  ${it.title}  (${kw})${tags.length ? `  {${tags.join(", ")}}` : ""}${page}`;
+}
 
 export async function seoRoadmapCommand(options: {
   brand?: string;
@@ -31,8 +66,7 @@ export async function seoRoadmapCommand(options: {
     items
       .slice(0, cap)
       .forEach(
-        (it: { id: string; title: string; status: string; primaryKeyword?: string }) =>
-          console.log(`  ${it.id}  [${it.status}]  ${it.title}  (${it.primaryKeyword ?? ""})`)
+        (it: RoadmapRow) => console.log(formatRoadmapRow(it))
       );
     console.log(`\nStats: total=${stats.total ?? "—"}  completed=${stats.completed ?? "—"}  in_progress=${stats.inProgress ?? "—"}  suggested=${stats.suggested ?? "—"}  completion=${stats.completionRate ?? "—"}%`);
     printWebUrl(res.data);
@@ -65,7 +99,7 @@ export async function seoRoadmapViewCommand(
 
 export async function seoRoadmapEditCommand(
   id: string,
-  options: { brand?: string; action?: string; status?: string; json?: boolean }
+  options: { brand?: string; action?: string; status?: string; wait?: boolean; json?: boolean }
 ): Promise<void> {
   const client = createClient();
   const brandId = options.brand ?? requireBrand();
@@ -90,6 +124,14 @@ export async function seoRoadmapEditCommand(
     console.log(`SUCCESS: Roadmap item ${id} updated.`);
     const it = res.data.item ?? res.data;
     if (it?.status) console.log(`Status: ${it.status}`);
+    // `start` on a refresh item rewrites its page in the background.
+    if (res.data.operationId) {
+      if (options.wait !== false) {
+        await pollOperation(client, brandId, res.data.operationId, { label: "Refresh page" });
+      } else {
+        console.log(`Operation: ${res.data.operationId}`);
+      }
+    }
   } catch (err) {
     printError(err);
     process.exit(1);
@@ -124,15 +166,19 @@ export async function seoWriteCommand(
     brand?: string;
     heroImage?: boolean;
     voice?: string;
+    author?: string;
     wait?: boolean;
+    force?: boolean;
     json?: boolean;
   }
 ): Promise<void> {
   const client = createClient();
   const brandId = options.brand ?? requireBrand();
   const body: Record<string, unknown> = {};
+  if (options.author) body.authorId = options.author;
   if (options.heroImage) body.generateHeroImage = true;
   if (options.voice) body.voiceProfileId = options.voice;
+  if (options.force) body.forceCannibalization = true;
   try {
     const res = await client.post(
       `/api/agent/v1/brands/${brandId}/seo/roadmap/${roadmapId}/write`,
@@ -148,6 +194,7 @@ export async function seoWriteCommand(
       }
     }
   } catch (err) {
+    if (printCannibalizationGuardError(err)) process.exit(1);
     printError(err);
     process.exit(1);
   }

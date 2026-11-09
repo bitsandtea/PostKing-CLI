@@ -25,7 +25,7 @@ export { pollOperation } from "../../lib/operations";
 export type { Operation, OperationProgress, OperationError } from "../../lib/operations";
 
 export const VALID_INTENTS = ["informational", "commercial", "navigational", "transactional"];
-export const VALID_ROADMAP_ACTIONS = ["ignore", "restore", "start", "complete"];
+export const VALID_ROADMAP_ACTIONS = ["ignore", "restore", "start", "complete", "pin", "unpin", "remove"];
 export const VALID_ROADMAP_STATUSES = ["suggested", "ignored", "in_progress", "completed"];
 
 // Re-export createClient and getBrandId for use in command modules

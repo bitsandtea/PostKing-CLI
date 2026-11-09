@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import * as os from "os";
 import { getApiKey, getApiUrl, isEnvVarAuth } from "./config";
 import { REQUEST_TIMEOUT_MS } from "./constants";
+import { formatInsufficientCreditsLines } from "./api-error";
 
 const pkg = require("../package.json");
 export const USER_AGENT = `postking-cli/${pkg.version} ${process.version} ${os.platform()}`;
@@ -46,6 +47,13 @@ export function createClient(): AxiosInstance {
         }
         // v0.1 uniform agent error envelope
         const envelope = data?.error;
+        // 402 insufficient_credits: not an auth failure. Say what it costs and
+        // how to top up, then exit 2 (docs/134 §4.2).
+        const creditLines = status === 402 ? formatInsufficientCreditsLines(envelope, baseURL) : null;
+        if (creditLines) {
+          for (const line of creditLines) console.error(line);
+          process.exit(2);
+        }
         if (envelope && typeof envelope === "object") {
           const code = envelope.code ?? "ERROR";
           const message = envelope.message ?? "(no message)";

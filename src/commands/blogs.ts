@@ -1,8 +1,9 @@
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
-import { extractApiError, printLanguageGateError } from "../api-error";
+import { extractApiError, printLanguageGateError, printCannibalizationGuardError } from "../api-error";
 import { validateLanguageFlag } from "../constants";
+import { pollOperation } from "../lib/operations";
 
 function requireBrand(): string {
   const brandId = getBrandId();
@@ -78,6 +79,8 @@ export async function blogsGenerateCommand(options: {
   wait?: boolean;
   timeout?: string;
   language?: string;
+  author?: string;
+  force?: boolean;
 }): Promise<void> {
   // Validate the flag before anything else — a bad code should fail with the
   // list of valid ones, not an auth error or a server 400.
@@ -93,6 +96,8 @@ export async function blogsGenerateCommand(options: {
         targetLength: options.length ?? "medium",
         primaryKeywords: options.keywords ? options.keywords.split(",").map((s) => s.trim()) : undefined,
         language,
+        authorId: options.author,
+        forceCannibalization: options.force || undefined,
       }
     );
     const data = res.data ?? {};
@@ -118,6 +123,7 @@ export async function blogsGenerateCommand(options: {
       }
     }
   } catch (err) {
+    if (printCannibalizationGuardError(err)) process.exit(1);
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);
   }
@@ -251,6 +257,40 @@ export async function blogsDeleteCommand(articleId: string): Promise<void> {
   try {
     await client.delete(`/api/agent/v1/brands/${brandId}/blogs/${articleId}`);
     console.log(`SUCCESS: Article ${articleId} deleted.`);
+  } catch (err) {
+    console.error(`ERROR: ${extractApiError(err)}`);
+    process.exit(1);
+  }
+}
+
+export async function blogsRefreshCommand(
+  blogId: string,
+  options: {
+    briefId?: string;
+    topic?: string;
+    instructions?: string;
+    wait?: boolean;
+    json?: boolean;
+  }
+): Promise<void> {
+  const client = createClient();
+  const brandId = requireBrand();
+  try {
+    const res = await client.post(`/api/agent/v1/brands/${brandId}/blogs/${blogId}/refresh`, {
+      briefId: options.briefId,
+      topic: options.topic,
+      instructions: options.instructions,
+    });
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    console.log(`SUCCESS: Refresh started for article ${blogId}.`);
+    if (res.data.operationId) {
+      if (options.wait !== false) {
+        await pollOperation(client, brandId, res.data.operationId, { label: "Refresh article" });
+      } else {
+        console.log(`Operation: ${res.data.operationId}`);
+      }
+    }
+    printWebUrl(res.data);
   } catch (err) {
     console.error(`ERROR: ${extractApiError(err)}`);
     process.exit(1);

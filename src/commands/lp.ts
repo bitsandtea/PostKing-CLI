@@ -127,6 +127,77 @@ export async function lpPublishCommand(slug: string): Promise<void> {
   }
 }
 
+/**
+ * Set whether a landing page is served by PostKing ('hosted', the default)
+ * or by the customer's own infra ('self_hosted' — they run their own
+ * renderer against the public /api/landing-pages/{slug} API; an optional
+ * reference implementation is https://github.com/bitsandtea/postking-selfhost).
+ * If a Domain is already connected whose hostingMode disagrees with the new
+ * value, the server 409s — disconnect that domain first (see the mode-match
+ * rule on 'pking lp connect-domain').
+ */
+export async function lpSetDistributionCommand(
+  slug: string,
+  distribution: "hosted" | "self_hosted",
+  options: { json?: boolean } = {}
+): Promise<void> {
+  const client = createClient();
+  try {
+    const res = await client.patch(`/api/agent/v1/landing-pages/${slug}/distribution`, { distribution });
+    if (options.json) { emitJson(res.data); return; }
+    console.log(`SUCCESS: Landing page "${slug}" distribution set to ${res.data?.distribution ?? distribution}.`);
+    if (distribution === "self_hosted") {
+      console.log(
+        "Localhost testing works immediately against the public API. For a production host: " +
+          "'pking domains add <domain> --hosting-mode self_hosted', verify it, then 'pking lp connect-domain'."
+      );
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+}
+
+/**
+ * Attach an already-verified Domain to a landing page (page must be
+ * published; requires paid access). The Domain's hostingMode must match
+ * the page's distribution ('postking' <-> 'hosted', 'self_hosted' <->
+ * 'self_hosted') — a mismatch 409s; the server's message names which side
+ * to change, surfaced verbatim below plus an actionable hint.
+ */
+export async function lpConnectDomainCommand(
+  slug: string,
+  options: { domainId?: string; domain?: string; json?: boolean } = {}
+): Promise<void> {
+  if (!options.domainId && !options.domain) {
+    console.error("ERROR: Provide --domain-id (preferred) or --domain.");
+    process.exit(1);
+  }
+  const client = createClient();
+  try {
+    const res = await client.post(`/api/agent/v1/landing-pages/${slug}/domain/connect`, {
+      domainId: options.domainId,
+      domain: options.domain,
+    });
+    if (options.json) { emitJson(res.data); return; }
+    console.log(`SUCCESS: Domain connected to landing page "${slug}".`);
+    printWebUrl(res.data);
+  } catch (err) {
+    const status = (err as { response?: { status?: number } }).response?.status;
+    if (status === 409) {
+      printError(err);
+      console.error(
+        "-> Hint: run 'pking lp set-distribution " +
+          slug +
+          " <hosted|self_hosted>' to match the domain's hostingMode, or add a domain with the matching --hosting-mode, then retry."
+      );
+    } else {
+      printError(err);
+    }
+    process.exit(1);
+  }
+}
+
 export async function lpViewCommand(slug: string, options: { json?: boolean } = {}): Promise<void> {
   const client = createClient();
   try {
