@@ -55,7 +55,7 @@ import { lpImportBundleCommand } from "./commands/lpImportBundle";
 import { postsApproveCommand, postsCalendarCommand, postsCancelCommand, postsCreateCommand, postsDeleteCommand, postsGenerateBatchCommand, postsGenerateCommand, postsListCommand, postsRescheduleCommand, postsScheduleCommand, postsViewCommand } from "./commands/posts";
 import { publicationsCreateCommand, publicationsListCommand, publicationsSetHostingCommand } from "./commands/publications";
 import { repurposeCommand } from "./commands/repurpose";
-import { seoBriefsApproveCommand, seoBriefsBulkApproveCommand, seoBriefsGenerateCommand, seoBriefsGenerateOneCommand, seoBriefsListCommand, seoBriefsRegenerateCommand, seoBriefsRejectCommand, seoBriefsViewCommand, seoCannibalizationReportCommand, seoCategorizeCommand, seoCheckCannibalizationCommand, seoClusterCommand, seoClustersApproveCommand, seoClustersBulkApproveCommand, seoClustersBulkRejectCommand, seoClustersGenerateCommand, seoClustersListCommand, seoClustersRejectCommand, seoClustersRestoreCommand, seoClustersUnapproveCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoKeywordsDeleteCommand, seoKeywordsEditCommand, seoKeywordsListCommand, seoLinkHealthCommand, seoMarketCommand, seoMarketSetCommand, CURATED_MARKET_CODES, MARKET_HELP, seoPublishCommand, seoResearchEstimateCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSearchDataCommand, seoSearchDataReconcileCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
+import { seoBriefsApproveCommand, seoBriefsBulkApproveCommand, seoBriefsGenerateCommand, seoBriefsGenerateOneCommand, seoBriefsListCommand, seoBriefsRegenerateCommand, seoBriefsRejectCommand, seoBriefsViewCommand, seoCannibalizationReportCommand, seoCategorizeCommand, seoCheckCannibalizationCommand, seoClusterCommand, seoClustersApproveCommand, seoClustersBulkApproveCommand, seoClustersBulkRejectCommand, seoClustersGenerateCommand, seoClustersListCommand, seoClustersRejectCommand, seoClustersRestoreCommand, seoClustersUnapproveCommand, seoCompetitorCommand, seoGapCommand, seoGenerateCommand, seoKeywordsCommand, seoKeywordsDeleteCommand, seoKeywordsEditCommand, seoKeywordsListCommand, seoLinkHealthCommand, seoMarketCommand, seoMarketSetCommand, CURATED_MARKET_CODES, MARKET_HELP, seoPublishCommand, seoResearchEstimateCommand, seoRoadmapBriefCommand, seoRoadmapCommand, seoRoadmapDeleteCommand, seoRoadmapEditCommand, seoRoadmapViewCommand, seoSearchDataCommand, seoSearchDataReconcileCommand, seoSeedsCommand, seoStatsCommand, seoWriteCommand } from "./commands/seo";
 import { competitorsAddCommand, competitorsComparisonCommand, competitorsComparisonRecomputeCommand, competitorsDeleteCommand, competitorsImportCommand, competitorsListCommand, competitorsRefreshCommand, competitorsSampleCommand } from "./commands/competitors";
 import { socialConnectPlatformCommand } from "./commands/social-extra";
 import { socialCheckCommand, socialConnectCommand, socialDisconnectCommand } from "./commands/social";
@@ -1667,11 +1667,19 @@ seoRoadmap
   .command("edit <id>")
   .description("Update a roadmap item's action or status.")
   .option("--brand <id>")
-  .option("--action <action>", "Action: ignore|restore|start|complete|pin|unpin|remove (restore = un-hide and keep visible, hidden/ignored items only (409 otherwise); pin = reconcile won't re-rank; remove = hide, never re-create; start on a refresh item rewrites its existing page)")
+  .option("--action <action>", "Action: ignore|restore|start|complete|pin|unpin|remove (restore = un-hide and keep visible, hidden/ignored items only (409 otherwise); pin = reconcile won't re-rank; remove = hide, never re-create; start on a refresh item creates its refresh brief; approve the brief to rewrite the page)")
   .option("--status <status>", "Status: suggested|ignored|in_progress|completed")
-  .option("--no-wait", "For a refresh item's start: print operationId and return without polling")
+  .option("--no-wait", "For start on a refresh item: print operationId and return without polling")
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => seoRoadmapEditCommand(id, opts));
+
+seoRoadmap
+  .command("brief <id>")
+  .description("Create the brief for a roadmap item (a refresh item gets a refresh brief that rewrites its existing page once approved). Idempotent. Async.")
+  .option("--brand <id>")
+  .option("--no-wait", "Print operationId and return without polling")
+  .option("--json", "Emit raw JSON payload")
+  .action((id, opts) => seoRoadmapBriefCommand(id, opts));
 
 seoRoadmap
   .command("delete <id>")

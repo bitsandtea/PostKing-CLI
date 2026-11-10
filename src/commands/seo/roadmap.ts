@@ -12,6 +12,7 @@ export interface RoadmapRow {
   itemType?: string;
   primaryKeyword?: string;
   primaryKeywords?: string[];
+  brief?: { briefId?: string | null; status?: string; error?: string | null };
   metadata?: {
     hiddenReason?: string;
     searchEvidence?: { impressions?: number; position?: number | null };
@@ -31,6 +32,8 @@ export function formatRoadmapRow(it: RoadmapRow): string {
   if (ev && typeof ev.impressions === "number") {
     tags.push(`${ev.impressions} impr${typeof ev.position === "number" ? ` @ pos ${ev.position.toFixed(1)}` : ""}`);
   }
+  const bs = it.brief;
+  tags.push(bs?.status && bs.status !== "none" ? `brief: ${bs.status}${bs.error ? ` (${bs.error})` : ""}` : "no brief");
   const ov = m.userOverride;
   if (ov?.pinned) tags.push("pinned");
   if (ov?.restored) tags.push("restored");
@@ -128,6 +131,42 @@ export async function seoRoadmapEditCommand(
     if (res.data.operationId) {
       if (options.wait !== false) {
         await pollOperation(client, brandId, res.data.operationId, { label: "Refresh page" });
+      } else {
+        console.log(`Operation: ${res.data.operationId}`);
+      }
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+}
+
+export async function seoRoadmapBriefCommand(
+  id: string,
+  options: { brand?: string; wait?: boolean; json?: boolean }
+): Promise<void> {
+  const client = createClient();
+  const brandId = options.brand ?? requireBrand();
+  try {
+    const res = await client.post(`/api/agent/v1/brands/${brandId}/seo/roadmap/${id}/brief`, {});
+    if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
+    if (res.data.outcome === "exists") {
+      console.log(`Brief already exists: ${res.data.briefId}. Review with: pking seo briefs view ${res.data.briefId}`);
+      return;
+    }
+    console.log("SUCCESS: Brief creation started.");
+    if (res.data.operationId) {
+      if (options.wait !== false) {
+        await pollOperation(client, brandId, res.data.operationId, { label: "Create brief" });
+        // briefId is null while "started"; re-read the item for the finished brief's id.
+        let briefId: string | null = res.data.briefId ?? null;
+        if (!briefId) {
+          const item = await client.get(`/api/agent/v1/brands/${brandId}/seo/roadmap/${id}`);
+          briefId = (item.data.item ?? item.data)?.brief?.briefId ?? null;
+        }
+        console.log(briefId
+          ? `Review with: pking seo briefs view ${briefId}  then approve with: pking seo briefs approve ${briefId}`
+          : "Brief ready. Find it with: pking seo briefs");
       } else {
         console.log(`Operation: ${res.data.operationId}`);
       }

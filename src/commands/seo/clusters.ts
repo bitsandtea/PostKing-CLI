@@ -145,6 +145,19 @@ export async function seoClusterCommand(options: {
 
 // ─── seo clusters list ───────────────────────────────────────────────────────
 
+export interface ClusterDemandView {
+  tag?: string;
+  impressions?: number;
+  bestPosition?: number | null;
+}
+
+/** "[proven_demand 1200 impr @ 4.2]" - real search demand tag, empty when no data. */
+export function formatClusterDemand(d?: ClusterDemandView | null): string {
+  if (!d?.tag) return "";
+  const pos = typeof d.bestPosition === "number" ? ` @ ${d.bestPosition.toFixed(1)}` : "";
+  return `  [${d.tag}${d.impressions ? ` ${d.impressions} impr${pos}` : ""}]`;
+}
+
 export async function seoClustersListCommand(options: {
   brand?: string;
   json?: boolean;
@@ -156,8 +169,8 @@ export async function seoClustersListCommand(options: {
     if (options.json) { console.log(JSON.stringify(res.data, null, 2)); return; }
     const clusters = res.data.clusters ?? [];
     console.log(`\nClusters (${clusters.length}):`);
-    clusters.forEach((c: { id: string; name: string; status?: string; briefCount?: number; briefGenerationStatus?: string }) =>
-      console.log(`  ${c.id}  ${c.name}  [${c.status ?? "—"}]  briefs=${c.briefCount ?? 0}  briefStatus=${c.briefGenerationStatus ?? "—"}`)
+    clusters.forEach((c: { id: string; name: string; status?: string; briefCount?: number; briefGenerationStatus?: string; demand?: ClusterDemandView }) =>
+      console.log(`  ${c.id}  ${c.name}  [${c.status ?? "—"}]  briefs=${c.briefCount ?? 0}  briefStatus=${c.briefGenerationStatus ?? "—"}${formatClusterDemand(c.demand)}`)
     );
   } catch (err) {
     printError(err);
