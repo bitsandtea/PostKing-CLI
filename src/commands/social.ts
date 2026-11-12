@@ -141,7 +141,7 @@ export async function socialDisconnectCommand(platformOrId: string): Promise<voi
     }
 
     console.log(`Disconnecting ${platformName} account...`);
-    await client.delete(`/api/brands/${brandId}/social-accounts/${targetAccountId}`);
+    await client.delete(`/api/agent/v1/brands/${brandId}/social-accounts/${targetAccountId}`);
     console.log(`SUCCESS: ${platformName} account disconnected.`);
   } catch (err: any) {
     console.error(`ERROR: Failed to disconnect account.`);

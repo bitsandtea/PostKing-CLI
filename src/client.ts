@@ -2,7 +2,7 @@ import axios, { AxiosInstance } from "axios";
 import * as os from "os";
 import { getApiKey, getApiUrl, isEnvVarAuth } from "./config";
 import { REQUEST_TIMEOUT_MS } from "./constants";
-import { formatInsufficientCreditsLines } from "./api-error";
+import { formatInsufficientCreditsLines, PendingConfirmation } from "./api-error";
 
 const pkg = require("../package.json");
 export const USER_AGENT = `postking-cli/${pkg.version} ${process.version} ${os.platform()}`;
@@ -33,7 +33,14 @@ export function createClient(): AxiosInstance {
   });
 
   client.interceptors.response.use(
-    (res) => res,
+    (res) => {
+      // Email-confirmed delete: the server did NOT delete yet. Not an error and
+      // must not be retried; the top-level handler prints it and exits 0.
+      if (res.status === 202 && res.data?.status === "pending_email_confirmation") {
+        throw new PendingConfirmation(res.data);
+      }
+      return res;
+    },
     (error) => {
       if (error.response) {
         const { status, data } = error.response;

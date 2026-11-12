@@ -262,7 +262,7 @@ export async function weeklyScheduleDeleteCommand(): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
   try {
-    await client.delete(`/api/brands/${brandId}/weekly-schedule`);
+    await client.delete(`/api/agent/v1/brands/${brandId}/weekly-schedule`);
     console.log("SUCCESS: Weekly schedule removed.");
   } catch (err: unknown) {
     console.error("ERROR: Could not remove weekly schedule.");

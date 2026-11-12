@@ -1,6 +1,44 @@
 import axios from "axios";
 
+export class PendingConfirmation extends Error {
+  readonly data: { message?: string; pendingActionId?: string; expiresAt?: string };
+  constructor(data: { message?: string; pendingActionId?: string; expiresAt?: string }) {
+    super(data.message ?? "Confirmation email sent.");
+    this.name = "PendingConfirmation";
+    this.data = data;
+  }
+}
+
+/** Print the pending-email-confirmation outcome (exit code stays 0). */
+export function printPendingConfirmation(p: PendingConfirmation): void {
+  const d = p.data;
+  if (process.argv.includes("--json")) {
+    console.log(JSON.stringify(d, null, 2));
+    return;
+  }
+  console.log(`PENDING: ${d.message ?? "Confirmation email sent."}`);
+  console.log("Nothing was deleted yet. Check your email to confirm.");
+  if (d.pendingActionId) {
+    console.log(`Pending action: ${d.pendingActionId}  (check it with: pking pending ${d.pendingActionId})`);
+  }
+  if (d.expiresAt) console.log(`Expires: ${d.expiresAt}`);
+}
+
+
+/**
+ * A pending-email-confirmation is a success, not a failure. Command catch
+ * blocks all funnel through extractApiError before exiting 1, so handle it
+ * here (and in index.ts for uncaught): print the outcome and exit 0.
+ */
+export function exitIfPending(err: unknown): void {
+  if (err instanceof PendingConfirmation) {
+    printPendingConfirmation(err);
+    process.exit(0);
+  }
+}
+
 export function extractApiError(err: unknown): string {
+  exitIfPending(err);
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as Record<string, unknown> | undefined;
     const envelope = data?.error;

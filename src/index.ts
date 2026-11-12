@@ -6,6 +6,8 @@ import { loginWithPasswordCommand, meCommand, registerCommand } from "./commands
 import { authorsSetDefaultCommand, authorsCreateCommand, authorsGenerateCommand, authorsListCommand, authorsUpdateCommand, categoriesCreateCommand, categoriesListCommand } from "./commands/authors";
 import { blogsCreateCommand, blogsDeleteCommand, blogsGenerateCommand, blogsListCommand, blogsPublishCommand, blogsRefreshCommand, blogsStatusCommand, blogsViewCommand } from "./commands/blogs";
 import { jobsListCommand } from "./commands/jobs";
+import { pendingStatusCommand } from "./commands/pending";
+import { exitIfPending } from "./api-error";
 import { brandCreateCommand, brandDeleteCommand, brandFinalizeCommand, brandInfoCommand, brandListCommand, brandOnboardCommand, brandSetCommand } from "./commands/brand";
 import { brandMixCommand } from "./commands/brand-mix";
 import { brandLanguageCommand } from "./commands/brand-language";
@@ -1090,6 +1092,13 @@ blogs
   .option("--no-wait", "Print operationId and return without polling")
   .option("--json", "Output raw JSON")
   .action((id, opts) => blogsRefreshCommand(id, opts));
+
+// ─── pending (email-confirmed deletes) ───────────────────────────────────────
+program
+  .command("pending <id>")
+  .description("Check an email-confirmed delete: pending, executed, failed, expired.")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => pendingStatusCommand(id, opts));
 
 // ─── jobs ────────────────────────────────────────────────────────────────────
 const jobs = program.command("jobs").description("Inspect async background jobs (blog generation, etc.).");
@@ -2445,4 +2454,9 @@ tools
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => toolsLeadsCommand(id, opts));
 
+process.on("unhandledRejection", (err) => {
+  exitIfPending(err);
+  console.error(`ERROR: ${err instanceof Error ? err.message : String(err)}`);
+  process.exit(1);
+});
 program.parse(process.argv);

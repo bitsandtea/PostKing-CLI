@@ -82,7 +82,7 @@ export async function brandThemesDeleteCommand(themeId: string): Promise<void> {
   console.log(`\n🗑 Deleting theme ${themeId}...`);
 
   try {
-    await client.delete(`/api/brands/${brandId}/themes/${themeId}`);
+    await client.delete(`/api/agent/v1/brands/${brandId}/themes/${themeId}`);
     console.log("✅ Theme deleted successfully.\n");
   } catch (err: any) {
     console.error(`❌ ERROR: ${extractApiError(err)}`);
