@@ -1,6 +1,6 @@
 {
   "name": "postking-cli",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "PostKing CLI for autonomous agents — authenticate, manage brands, schedule posts, and more.",
   "main": "dist/index.js",
   "bin": {
@@ -13,7 +13,7 @@
     "type": "git",
     "url": "git+https://github.com/bitsandtea/PostKing-CLI.git"
   },
-  "homepage": "https://github.com/bitsandtea/PostKing-CLI#readme",
+  "homepage": "https://postking.app/?utm_source=npm-postking-cli",
   "bugs": {
     "url": "https://github.com/bitsandtea/PostKing-CLI/issues"
   },

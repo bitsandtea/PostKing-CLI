@@ -2,6 +2,13 @@
 
 The PostKing CLI lets you interact with the PostKing platform directly from your terminal or autonomous agent. It covers authentication, brand management, content generation, scheduling, repurposing, and more.
 
+## Get connected
+
+- **No account yet?** [Create one](https://try.postking.app/auth/register?utm_source=github-postking-cli&utm_medium=readme) — or just run `pking login`: the approval screen lets you sign up on the spot and brings you straight back.
+- **Prefer no install?** Use the hosted MCP URL `https://mcp.postking.app/mcp` in Claude, Cursor or any MCP client.
+- **Setup guide for Claude, ChatGPT and Cursor:** [postking.app/mcp](https://postking.app/mcp?utm_source=github-postking-cli&utm_medium=readme)
+- **What PostKing does:** [postking.app](https://postking.app/?utm_source=github-postking-cli&utm_medium=readme)
+
 ## Installation
 
 ```bash

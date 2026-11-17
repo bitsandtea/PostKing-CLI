@@ -3,6 +3,8 @@ import { getApiUrl, setConfig } from "../config";
 import { POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS as MAX_ATTEMPTS } from "../constants";
 import { USER_AGENT } from "../client";
 import { extractApiError } from "../api-error";
+import { createPendingLogin, resumePendingLogin } from "./auth-device";
+import { clearPendingLogin, type ReusablePendingLogin } from "../lib/pendingLogin";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,21 +15,23 @@ export async function loginCommand(): Promise<void> {
 
   console.log("Initiating PostKing agent authentication...");
 
-  let deviceCode: string;
-  let userCode: string;
-  let verificationUri: string;
-
   const isLocal = apiUrl.includes("localhost") || apiUrl.includes("127.0.0.1");
   const authClient = axios.create({
     headers: { "User-Agent": USER_AGENT },
     httpsAgent: isLocal ? new (require('https')).Agent({ rejectUnauthorized: false }) : undefined
   });
 
+  // One login attempt = one device request: a re-run picks up the request
+  // from the previous run (still waiting, or already approved) instead of
+  // creating another.
+  let pending: ReusablePendingLogin;
   try {
-    const res = await authClient.post(`${apiUrl}/api/agent/auth/device/code`);
-    deviceCode = res.data.device_code;
-    userCode = res.data.user_code;
-    verificationUri = res.data.verification_uri;
+    const resumed = await resumePendingLogin(authClient, apiUrl);
+    if (resumed === "logged_in") {
+      console.log("SUCCESS: Authenticated successfully! (approved earlier — credentials saved)");
+      return;
+    }
+    pending = resumed ?? (await createPendingLogin(authClient, apiUrl));
   } catch (err: unknown) {
     const message = extractApiError(err);
     console.error(`\n❌ ERROR: Failed to initiate authentication — ${message}`);
@@ -39,12 +43,13 @@ export async function loginCommand(): Promise<void> {
     }
     process.exit(1);
   }
+  const deviceCode = pending.device_code;
 
   console.log("");
   console.log("================================================================");
   console.log("WAITING_FOR_HUMAN: Please complete the following steps:");
-  console.log(`  1. Navigate to: ${verificationUri}`);
-  console.log(`  2. Enter the code: ${userCode}`);
+  console.log(`  1. Navigate to: ${pending.verification_uri}`);
+  console.log(`  2. Press Approve (code ${pending.user_code}). No account yet? The same page lets you create one.`);
   console.log("================================================================");
   console.log("");
   console.log("DO NOT TIMEOUT. Polling the PostKing server every 5 seconds.");
@@ -61,6 +66,7 @@ export async function loginCommand(): Promise<void> {
 
       const { access_token } = res.data;
       setConfig({ apiKey: access_token, apiUrl });
+      clearPendingLogin();
 
       console.log("================================================================");
       console.log("SUCCESS: Authenticated successfully!");
@@ -82,10 +88,12 @@ export async function loginCommand(): Promise<void> {
         // Normal — still waiting for human. Keep polling silently.
         continue;
       } else if (errorCode === "expired_token") {
-        console.error("ERROR: The activation code has expired (15 minute limit).");
+        clearPendingLogin();
+        console.error("ERROR: The activation code has expired.");
         console.error("Run 'pking login' again to generate a new code.");
         process.exit(1);
       } else if (errorCode === "access_denied") {
+        clearPendingLogin();
         console.error("ERROR: The human denied the authorization request.");
         process.exit(1);
       } else {
@@ -96,6 +104,7 @@ export async function loginCommand(): Promise<void> {
   }
 
   console.error("ERROR: Timed out waiting for authorization (15 minutes elapsed).");
-  console.error("Run 'pking login' again to restart.");
+  console.error(`The link is still valid: ${pending.verification_uri}`);
+  console.error("Run 'pking login' again to keep waiting on the same link.");
   process.exit(1);
 }

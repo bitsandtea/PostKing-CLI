@@ -1,20 +1,23 @@
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import fs from "fs";
 import os from "os";
 import path from "path";
 import { getApiUrl, setConfig } from "../config";
 import { USER_AGENT } from "../client";
 import { extractApiError } from "../api-error";
+import {
+  DEVICE_CLIENT_NAME,
+  clearPendingLogin as clearPending,
+  decideReuse,
+  isReusablePendingLogin,
+  pendingLoginFromResponse,
+  readPendingLogin as readPending,
+  writePendingLogin as writePending,
+  type ReusablePendingLogin,
+} from "../lib/pendingLogin";
 
-const PENDING_FILE = path.join(os.homedir(), ".pking", "pending-login.json");
 const PENDING_REGISTER_FILE = path.join(os.homedir(), ".pking", "pending-register.json");
 const PENDING_RESET_FILE = path.join(os.homedir(), ".pking", "pending-reset.json");
-
-interface PendingLogin {
-  device_code: string;
-  apiUrl: string;
-  startedAt: number;
-}
 
 interface PendingRegister {
   device_code: string;
@@ -38,24 +41,6 @@ function makeAuthClient(apiUrl: string) {
       ? new (require("https").Agent)({ rejectUnauthorized: false })
       : undefined,
   });
-}
-
-function writePending(state: PendingLogin): void {
-  fs.mkdirSync(path.dirname(PENDING_FILE), { recursive: true });
-  fs.writeFileSync(PENDING_FILE, JSON.stringify(state, null, 2));
-}
-
-function readPending(): PendingLogin | null {
-  if (!fs.existsSync(PENDING_FILE)) return null;
-  try {
-    return JSON.parse(fs.readFileSync(PENDING_FILE, "utf-8"));
-  } catch {
-    return null;
-  }
-}
-
-function clearPending(): void {
-  if (fs.existsSync(PENDING_FILE)) fs.unlinkSync(PENDING_FILE);
 }
 
 function writePendingRegister(state: PendingRegister): void {
@@ -94,34 +79,83 @@ function clearPendingReset(): void {
   if (fs.existsSync(PENDING_RESET_FILE)) fs.unlinkSync(PENDING_RESET_FILE);
 }
 
+function printLoginLink(pending: ReusablePendingLogin, reused: boolean): void {
+  console.log(reused ? "PostKing authentication already in progress — same link as before." : "PostKing authentication started.");
+  console.log("");
+  console.log(`  Visit:      ${pending.verification_uri}`);
+  console.log(`  User code:  ${pending.user_code}`);
+  console.log("");
+  console.log("Open the link and press Approve (no account yet? the same page lets you create one).");
+  console.log("After approving in your browser, run:  pking login-finish");
+  const minutesLeft = Math.max(1, Math.floor((pending.expiresAt - Date.now()) / 60000));
+  console.log(`The activation code is valid for ${minutesLeft} more minutes.`);
+}
+
+type TokenAnswer = { access_token?: string; error?: string } | null;
+
+/**
+ * One login attempt = one device request. Looks at the request saved by an
+ * earlier run: redeems it when the user already approved (credentials saved,
+ * returns "logged_in"), hands it back when it is still waiting, and clears it
+ * otherwise (returns null — the caller creates a new one).
+ */
+export async function resumePendingLogin(
+  client: AxiosInstance,
+  apiUrl: string
+): Promise<"logged_in" | ReusablePendingLogin | null> {
+  const previous = readPending();
+  if (!isReusablePendingLogin(previous, apiUrl)) return null;
+
+  const answer: TokenAnswer = await client
+    .post(`${apiUrl}/api/agent/auth/device/token`, { device_code: previous.device_code })
+    .then((res) => res.data as TokenAnswer)
+    .catch((err: unknown) => (axios.isAxiosError(err) ? ((err.response?.data ?? null) as TokenAnswer) : null));
+
+  const decision = decideReuse(answer);
+  if (decision === "logged_in" && answer?.access_token) {
+    setConfig({ apiKey: answer.access_token, apiUrl });
+    clearPending();
+    return "logged_in";
+  }
+  if (decision === "show_again") return previous;
+  clearPending();
+  return null;
+}
+
+/** Creates a device request on the server and saves it for reuse. */
+export async function createPendingLogin(client: AxiosInstance, apiUrl: string): Promise<ReusablePendingLogin> {
+  const res = await client.post(`${apiUrl}/api/agent/auth/device/code`, {
+    client_name: DEVICE_CLIENT_NAME,
+  });
+  const pending = pendingLoginFromResponse(res.data, apiUrl);
+  writePending(pending);
+  return pending;
+}
+
 export async function loginStartCommand(): Promise<void> {
   const apiUrl = getApiUrl();
   const client = makeAuthClient(apiUrl);
 
-  let deviceCode: string;
-  let userCode: string;
-  let verificationUri: string;
+  const resumed = await resumePendingLogin(client, apiUrl);
+  if (resumed === "logged_in") {
+    console.log("SUCCESS: Authenticated. Credentials saved.");
+    return;
+  }
+  if (resumed) {
+    printLoginLink(resumed, true);
+    return;
+  }
 
+  let pending: ReusablePendingLogin;
   try {
-    const res = await client.post(`${apiUrl}/api/agent/auth/device/code`);
-    deviceCode = res.data.device_code;
-    userCode = res.data.user_code;
-    verificationUri = res.data.verification_uri;
+    pending = await createPendingLogin(client, apiUrl);
   } catch (err: unknown) {
     const message = extractApiError(err);
     console.error(`ERROR: Failed to initiate authentication — ${message}`);
     process.exit(1);
   }
 
-  writePending({ device_code: deviceCode, apiUrl, startedAt: Date.now() });
-
-  console.log("PostKing authentication started.");
-  console.log("");
-  console.log(`  Visit:      ${verificationUri}`);
-  console.log(`  User code:  ${userCode}`);
-  console.log("");
-  console.log("After authorizing in your browser, run:  pking login-finish");
-  console.log("The activation code is valid for 60 minutes.");
+  printLoginLink(pending, false);
 }
 
 export async function loginFinishCommand(): Promise<void> {
@@ -195,7 +229,7 @@ export async function registerStartCommand(options: {
 
   try {
     const codeRes = await client.post(`${apiUrl}/api/agent/auth/device/code`, {
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
     deviceCode = codeRes.data.device_code;
   } catch (err: unknown) {
@@ -208,7 +242,7 @@ export async function registerStartCommand(options: {
     await client.post(`${apiUrl}/api/agent/v1/auth/register`, {
       email: options.email,
       device_code: deviceCode,
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
   } catch (err: unknown) {
     const message = extractApiError(err);
@@ -336,7 +370,7 @@ export async function resendCommand(): Promise<void> {
     await client.post(`${apiUrl}/api/agent/v1/auth/resend`, {
       email,
       device_code: deviceCode,
-      client_name: "pking-cli",
+      client_name: DEVICE_CLIENT_NAME,
       ...(isReset ? { flow: "reset" } : {}),
     });
     if (isReset) {
@@ -366,7 +400,7 @@ export async function resetPasswordCommand(options: {
 
   try {
     const codeRes = await client.post(`${apiUrl}/api/agent/auth/device/code`, {
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
     deviceCode = codeRes.data.device_code;
   } catch (err: unknown) {
@@ -379,7 +413,7 @@ export async function resetPasswordCommand(options: {
     await client.post(`${apiUrl}/api/agent/v1/auth/reset-password`, {
       email: options.email,
       device_code: deviceCode,
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
   } catch (err: unknown) {
     const message = extractApiError(err);

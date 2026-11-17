@@ -3,6 +3,7 @@ import { getApiUrl, setConfig, isEnvVarAuth } from "../config";
 import { MAX_POLL_ATTEMPTS, POLL_INTERVAL_MS } from "../constants";
 import { USER_AGENT } from "../client";
 import { extractApiError } from "../api-error";
+import { DEVICE_CLIENT_NAME } from "../lib/pendingLogin";
 
 interface AuthOptions {
   email: string;
@@ -85,7 +86,7 @@ export async function registerCommand(options: AuthOptions): Promise<void> {
     const token = await deviceFlow(apiUrl, "/api/agent/v1/auth/register", {
       email: options.email,
       password: options.password,
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
     setConfig({ apiKey: token, apiUrl });
     console.log("SUCCESS: Account registered and authenticated.");
@@ -102,7 +103,7 @@ export async function loginWithPasswordCommand(options: AuthOptions): Promise<vo
     const token = await deviceFlow(apiUrl, "/api/agent/v1/auth/login", {
       email: options.email,
       password: options.password,
-      client_name: options.clientName || "pking-cli",
+      client_name: options.clientName || DEVICE_CLIENT_NAME,
     });
     setConfig({ apiKey: token, apiUrl });
     console.log("SUCCESS: Logged in.");

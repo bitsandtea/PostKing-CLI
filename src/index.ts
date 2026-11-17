@@ -54,6 +54,7 @@ import {
   lpViewCommand,
 } from "./commands/lp";
 import { lpImportBundleCommand } from "./commands/lpImportBundle";
+import { lpSideTranslateCommand, lpSideTranslationsCommand } from "./commands/lpSideTranslations";
 import { postsApproveCommand, postsCalendarCommand, postsCancelCommand, postsCreateCommand, postsDeleteCommand, postsGenerateBatchCommand, postsGenerateCommand, postsListCommand, postsRescheduleCommand, postsScheduleCommand, postsViewCommand } from "./commands/posts";
 import { publicationsCreateCommand, publicationsListCommand, publicationsSetHostingCommand } from "./commands/publications";
 import { repurposeCommand } from "./commands/repurpose";
@@ -1540,6 +1541,37 @@ lp
   .option("--language <code>", "Language of the new variant, e.g. --language cs (required)")
   .option("--json", "Emit raw JSON payload")
   .action((slug, opts) => lpTranslateCommand(slug, opts));
+
+lp
+  .command("side-translations <slug>")
+  .description(
+    "Show side-page translation status for a landing page in one language:\n" +
+    "which side pages exist, and whether each is translated / published."
+  )
+  .option("--language <code>", "Target language, e.g. --language cs (required)")
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, opts) => lpSideTranslationsCommand(slug, opts));
+
+lp
+  .command("side-translate <slug>")
+  .description(
+    "Translate a landing page's side pages (pricing, comparisons...) into a\n" +
+    "language. <slug> is the SOURCE landing page; it must already have a variant\n" +
+    "in that language ('lp translate' first). Translated pages keep the SAME slug\n" +
+    "and live under the variant (e.g. /cs/pricing). Created as drafts unless\n" +
+    "--publish (publishes only pages whose source is published). Existing\n" +
+    "translations are skipped unless --overwrite (writes a new draft version,\n" +
+    "deletes nothing). Costs credits per page. hreflang tags appear\n" +
+    "automatically once both versions are published. Async — pass --wait to poll."
+  )
+  .option("--language <code>", "Target language, e.g. --language cs (required)")
+  .option("--slugs <a,b>", "Comma-separated side-page slugs (or use --all)")
+  .option("--all", "Translate every side page")
+  .option("--overwrite", "Re-translate pages that already have a translation")
+  .option("--publish", "Publish translated pages whose source is published")
+  .option("--wait", "Block and poll until the operation completes")
+  .option("--json", "Emit raw JSON payload")
+  .action((slug, opts) => lpSideTranslateCommand(slug, opts));
 
 // ─── domains extras (add, delete, connect) ───────────────────────────────────
 domains
