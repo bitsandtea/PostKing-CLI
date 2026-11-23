@@ -15,6 +15,7 @@ import path from "path";
 import { createClient } from "../client";
 import { getBrandId } from "../config";
 import { printWebUrl } from "../output";
+import { classifyDirectUpload, oversizeBase64Message, uploadDirect } from "../lib/assetUpload";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -160,11 +161,12 @@ export interface VisualsUploadOptions {
 }
 
 /**
- * Wraps POST /api/agent/v1/brands/{brandId}/assets
+ * Uploads a local file to the brand asset library.
  *
- * NOTE: Uses base64-encoded body for Node >=16 compatibility.
- * Team B's route must accept { fileBase64, fileName, name?, description?, tags? }.
- * Once B confirms multipart-only, upgrade to native FormData (Node >=18).
+ * Videos and documents: POST .../assets/upload-url -> PUT to the presigned R2
+ * URL (no auth header) -> POST .../assets/complete.
+ * Images and everything else: POST .../assets with a base64 JSON body, capped
+ * at 10MB locally (the server image limit).
  */
 export async function visualsUploadCommand(options: VisualsUploadOptions): Promise<void> {
   const client = createClient();
@@ -176,20 +178,46 @@ export async function visualsUploadCommand(options: VisualsUploadOptions): Promi
     process.exit(1);
   }
 
+  const fileName = path.basename(filePath);
+  const tags = options.tags ? options.tags.split(",").map((t) => t.trim()) : undefined;
+  const direct = classifyDirectUpload(fileName);
+
+  if (!direct) {
+    const tooBig = oversizeBase64Message(fs.statSync(filePath).size);
+    if (tooBig) {
+      console.error(`ERROR: ${tooBig}`);
+      process.exit(1);
+    }
+  }
+
   const fileBuffer = fs.readFileSync(filePath);
-  const body: Record<string, unknown> = {
-    fileBase64: fileBuffer.toString("base64"),
-    fileName: path.basename(filePath),
-  };
-  if (options.name) body.name = options.name;
-  if (options.description) body.description = options.description;
-  if (options.tags) body.tags = options.tags.split(",").map((t) => t.trim());
 
   try {
-    const res = await client.post(`/api/agent/v1/brands/${brandId}/assets`, body);
-    if (options.json) { emitJson(res.data); return; }
+    let data: any;
+    if (direct) {
+      data = await uploadDirect({
+        client,
+        brandId,
+        bytes: fileBuffer,
+        fileName,
+        name: options.name,
+        description: options.description,
+        tags,
+        ...direct,
+      });
+    } else {
+      const body: Record<string, unknown> = {
+        fileBase64: fileBuffer.toString("base64"),
+        fileName,
+      };
+      if (options.name) body.name = options.name;
+      if (options.description) body.description = options.description;
+      if (tags) body.tags = tags;
+      data = (await client.post(`/api/agent/v1/brands/${brandId}/assets`, body)).data;
+    }
+    if (options.json) { emitJson(data); return; }
 
-    const a = res.data.asset ?? res.data;
+    const a = data.asset ?? data;
     console.log(`SUCCESS: Asset uploaded.`);
     console.log(`  ID:  ${a.id}`);
     console.log(`  URL: ${a.url}`);

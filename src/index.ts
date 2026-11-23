@@ -17,7 +17,7 @@ import { brandSmartWeekCommand } from "./commands/brand-smart-week";
 import { brandThemesCommand, brandThemesDeleteCommand, brandThemesEditCommand, brandThemesGenerateCommand } from "./commands/brand-themes";
 import { brandVisualImportAssetsCommand, brandVisualSetCommand } from "./commands/brand-visual";
 import { brandAudienceEditCommand, brandAudiencePrepromptCommand, brandCrawlProfileCommand } from "./commands/brand-audience";
-import { domainsAddCommand, domainsConnectCommand, domainsDeleteCommand } from "./commands/domains-extra";
+import { domainsAddCommand, domainsConnectCommand, domainsDeleteCommand, domainsSetRevalidateSecretCommand, domainsSwitchHostingCommand } from "./commands/domains-extra";
 import { domainsListCommand, domainsVerifyCommand } from "./commands/domains";
 import { editorAICheckCommand, editorHumanizeCommand, editorRewriteCommand } from "./commands/editor";
 import { keysCreateCommand, keysListCommand, keysRevokeCommand } from "./commands/keys";
@@ -74,6 +74,12 @@ import {
   searchPerformanceSourcesCommand,
   searchPerformanceWorklistCommand,
 } from "./commands/search-performance";
+import {
+  socialPerformanceHistoryCommand,
+  socialPerformanceOverviewCommand,
+  socialPerformancePostCommand,
+  socialPerformancePostsCommand,
+} from "./commands/social-performance";
 import {
   toolsCreateCommand,
   toolsDeleteCommand,
@@ -572,6 +578,7 @@ posts
   .description("List recent posts and drafts.")
   .option("--status <status>", "Filter by status: created, scheduled, posted")
   .option("--platform <platform>", "Filter by platform: x, linkedin, etc., or 'custom:<chars>'")
+  .option("--sort <field>", "Rank published posts by engagementRate | impressions | reactions (nulls last)")
   .option("--limit <number>", "Number of posts to show (default: 10)", "10")
   .option("--json", "Output raw JSON")
   .action((options) => postsListCommand(options));
@@ -1593,6 +1600,26 @@ domains
   .option("--routing-type <type>", "publication targets only: 'path' (default), 'root', or 'subdomain'")
   .option("--path-prefix <prefix>", "publication targets with path routing, e.g. '/blog'")
   .action((id, opts) => domainsConnectCommand(id, opts));
+domains
+  .command("switch-hosting <domainId>")
+  .description(
+    "Atomically switch a VERIFIED domain, its landing pages and its blogs between 'postking' and 'self_hosted' in one step. " +
+      "Nothing is disconnected; canonicals, routing and URLs are untouched. Run with --dry-run first to see exactly what would change. " +
+      "409 domain_not_verified / external_attachments if the domain is unverified or an external page/blog is attached."
+  )
+  .requiredOption("--mode <mode>", "Target mode: 'postking' or 'self_hosted'")
+  .option("--dry-run", "Show what would change and write nothing")
+  .option("--json", "Output raw JSON")
+  .action((id, opts) => domainsSwitchHostingCommand(id, opts));
+domains
+  .command("set-revalidate-secret <domainId>")
+  .description(
+    "Set or clear the shared secret PostKing sends as x-revalidate-secret on cache-revalidate pings to a self_hosted site. " +
+      "Write-only: it is never shown again."
+  )
+  .option("--secret <value>", "New secret, at least 16 characters")
+  .option("--clear", "Remove the stored secret")
+  .action((id, opts) => domainsSetRevalidateSecretCommand(id, opts));
 
 // ─── SEO ─────────────────────────────────────────────────────────────────────
 const seo = program.command("seo").description("Run the PostKing SEO agentic pipeline: seeds → generate (L0) → score → clusters generate (L2) → approve clusters → briefs generate (L3) → approve briefs → write article (L4).");
@@ -2025,7 +2052,9 @@ visuals
   .command("upload")
   .description(
     "Upload a local file to the brand asset library (requires Node 18+).\n" +
-    "Wraps POST /api/agent/v1/brands/{brandId}/assets (multipart)"
+    "Videos (mp4, webm, mov, avi, m4v; up to 500MB) and documents (pdf, doc, docx, txt; up to 50MB) upload directly to storage:\n" +
+    "  POST .../assets/upload-url -> PUT presigned URL -> POST .../assets/complete\n" +
+    "Images and other files are sent as base64 to POST /api/agent/v1/brands/{brandId}/assets and must be 10MB or smaller."
   )
   .requiredOption("--file <path>", "Path to the local file to upload")
   .option("--name <name>", "Display name for the asset")
@@ -2282,6 +2311,65 @@ competitors
   .option("--brand <id>", "Brand id (defaults to active brand)")
   .option("--json", "Emit raw JSON payload")
   .action((opts) => competitorsSampleCommand(opts));
+
+// ─── social-performance ───────────────────────────────────────────────────
+const socialPerformance = program
+  .command("social-performance")
+  .description("Social account + post performance for the active brand (followers, impressions, engagement, cadence). Free, read-only.");
+
+socialPerformance
+  .command("overview")
+  .description(
+    "Summary vs previous period, per-account status, top posts, cadence. null/— = not provided by the platform.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/social-performance"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--days <n>", "7 | 28 | 90 | 180 | 480 (default: 28)")
+  .option("--platform <platform>", "x | facebook | linkedin | linkedin_company | threads | instagram")
+  .option("--sections <list>", "Comma list of summary,accounts,topPosts,timeseries,cadence (default) plus opt-in bottomPosts,bestTimes,byTheme,byFormat")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => socialPerformanceOverviewCommand(opts));
+
+socialPerformance
+  .command("history <accountId>")
+  .description(
+    "Follower/impressions/engagements/posts history for one account.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/social-performance/accounts/{accountId}/history"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--granularity <g>", "day | week | month (default: week)")
+  .option("--from <date>", "YYYY-MM-DD")
+  .option("--to <date>", "YYYY-MM-DD")
+  .option("--metrics <list>", "Comma subset of followers,impressions,engagements,posts")
+  .option("--limit <n>", "Most recent buckets to show (default: 26)")
+  .option("--json", "Emit raw JSON payload")
+  .action((accountId, opts) => socialPerformanceHistoryCommand(accountId, opts));
+
+socialPerformance
+  .command("posts")
+  .description(
+    "Per-post metrics, sortable and paged.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/social-performance/posts"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--days <n>", "7 | 28 | 90 | 180 | 480 (default: 28)")
+  .option("--platform <platform>", "x | facebook | linkedin | linkedin_company | threads | instagram")
+  .option("--account <id>", "Only posts from this connected account")
+  .option("--sort <field>", "impressions | engagementRate | reactions | publishedAt (default: publishedAt)")
+  .option("--limit <n>", "Rows per page (default: 10, max 200)")
+  .option("--offset <n>", "Row offset for paging")
+  .option("--json", "Emit raw JSON payload")
+  .action((opts) => socialPerformancePostsCommand(opts));
+
+socialPerformance
+  .command("post <postId>")
+  .description(
+    "One post: metrics, what it was made with (theme, hook, voice, visual) and engagement marks over time.\n" +
+    "Wraps GET /api/agent/v1/brands/{brandId}/social-performance/posts/{postId}"
+  )
+  .option("--brand <id>", "Brand id (defaults to active brand)")
+  .option("--json", "Emit raw JSON payload")
+  .action((postId, opts) => socialPerformancePostCommand(postId, opts));
 
 // ─── search-performance ────────────────────────────────────────────────────
 const searchPerformance = program

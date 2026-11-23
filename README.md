@@ -452,6 +452,23 @@ pking social disconnect linkedin
 pking social disconnect clxaccount1234
 ```
 
+### `pking social-performance` (free, read-only)
+Social performance for the active brand. `—` means the platform does not provide the metric; `0` is a measured zero.
+
+```bash
+pking social-performance overview --days 28
+pking social-performance overview --days 90 --platform linkedin --sections bottomPosts,bestTimes,byTheme,byFormat
+pking social-performance posts --days 7 --platform linkedin --sort engagementRate --limit 5
+pking social-performance post clxpost1234
+pking social-performance history clxaccount1234 --granularity week
+pking posts list --sort engagementRate --limit 10
+```
+
+- `overview --sections` defaults to summary, accounts, topPosts, timeseries, cadence; add `bottomPosts`, `bestTimes` (UTC day x hour, thin cells flagged), `byTheme`, `byFormat`.
+- `posts` rows show theme, format and visual type next to the metrics, so the best posts can be compared without a call per post.
+- `post <postId>` shows one post's metrics, what it was made with (theme, hook, voice, visual) and its engagement marks over time.
+- `posts list --sort engagementRate|impressions|reactions` ranks published posts by their latest metrics.
+
 ---
 
 ## Domains (`pking domains`)

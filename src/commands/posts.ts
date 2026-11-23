@@ -16,6 +16,7 @@ interface PostsCreateOptions {
 interface PostsListOptions {
   status?: string;
   platform?: string;
+  sort?: string;
   limit?: number;
   json?: boolean;
 }
@@ -30,6 +31,7 @@ interface PostResult {
   postAt?: string;
   operationStatus?: string;
   outputData?: string;
+  metrics?: { impressions?: number | null; reactions?: number | null; comments?: number | null; engagementRate?: number | null } | null;
 }
 
 export async function postsCreateCommand(options: PostsCreateOptions): Promise<void> {
@@ -104,8 +106,11 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
     if (options.status) params.append("status", options.status);
     if (options.platform) params.append("platform", options.platform);
     if (options.limit) params.append("limit", options.limit.toString());
+    // Engagement sort exists only on the agent route (published posts, newest 1000 ranked).
+    if (options.sort) params.append("sort", options.sort);
+    const base = options.sort ? `/api/agent/v1/brands/${brandId}/posts` : `/api/brands/${brandId}/posts`;
 
-    const res = await client.get(`/api/brands/${brandId}/posts?${params.toString()}`);
+    const res = await client.get(`${base}?${params.toString()}`);
     const posts: PostResult[] = res.data.posts || [];
 
     if (options.json) {
@@ -136,7 +141,11 @@ export async function postsListCommand(options: PostsListOptions): Promise<void>
       const statusStr = post.confirmed ? "APPROVED" : "DRAFT";
       const pastTag = isPastDue ? " [PAST]" : "";
       const schedStr = schedTime ? ` @ ${new Date(schedTime).toLocaleString()}` : "";
-      console.log(`  [${statusStr}${pastTag}] ${post.id} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}`);
+      const m = post.metrics;
+      const metricStr = options.sort && m
+        ? ` | impr ${m.impressions ?? "—"} react ${m.reactions ?? "—"} cmts ${m.comments ?? "—"} ER ${m.engagementRate == null ? "—" : (m.engagementRate * 100).toFixed(1) + "%"}`
+        : "";
+      console.log(`  [${statusStr}${pastTag}] ${post.id} | ${post.platform.padEnd(10)} | ${post.content.substring(0, 50).replace(/\n/g, " ")}...${schedStr}${metricStr}`);
     });
 
     console.log("\nUse 'pking posts generate' to draft a new post.");
