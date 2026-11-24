@@ -1186,7 +1186,7 @@ reddit
   .description(
     "Rewrite seed text or an existing blog article into a Reddit-native post for a\n" +
     "subreddit, then poll to completion and print each saved variation with its\n" +
-    "compliance verdict. Provide exactly one of --seed or --blog."
+    "check (passed, needs review or blocked; only passed drafts are approved). Provide exactly one of --seed or --blog."
   )
   .requiredOption("--subreddit <name>", "Target subreddit, with or without leading 'r/'")
   .option("--seed <text>", "Seed text to rewrite (mutually exclusive with --blog)")
@@ -1197,13 +1197,14 @@ reddit
   .option("--voice <voiceId>", "Voice profile ID")
   .option("--variations <n>", "Number of variations to generate (1-3)", "1")
   .option("--repeat <n>", "Run the whole rewrite flow N times sequentially, for eyeballing variance", "1")
+  .option("--founder-context <text>", "Real first-person facts (founder story, numbers). Without it the post is written as an observation or how-to, never a made-up personal story.")
   .option("--json", "Dump raw outputData JSON for each post instead of pretty-printed output")
   .option("--brand <brandId>", "Brand id (defaults to active brand)")
   .action((opts) => redditRewriteCommand(opts));
 
 reddit
   .command("pool")
-  .description("List this brand's pooled subreddits (display name, posting style, rule count).")
+  .description("List this brand's pooled subreddits (brand fit, members, activity, promotion rules, posting style, rule count).")
   .option("--json", "Output raw JSON")
   .option("--brand <brandId>", "Brand id (defaults to active brand)")
   .action((opts) => redditPoolCommand(opts));
@@ -2097,9 +2098,11 @@ visuals
 visuals
   .command("delete <assetId>")
   .description(
-    "Soft-delete (deactivate) an asset from the library.\n" +
-    "Wraps DELETE /api/agent/v1/brands/{brandId}/assets/{assetId}"
+    "Delete an asset from the library. Soft-delete by default (the file is kept);\n" +
+    "--hard also removes the file from storage, for good.\n" +
+    "Wraps DELETE /api/agent/v1/brands/{brandId}/assets/{assetId}[?hard=true]"
   )
+  .option("--hard", "Permanently delete: also remove the file from storage (cannot be undone)")
   .option("--json", "Emit raw JSON payload")
   .action((id, opts) => visualsDeleteCommand(id, opts));
 

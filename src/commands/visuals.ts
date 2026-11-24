@@ -350,20 +350,24 @@ export async function visualsTagCommand(assetId: string, options: VisualsTagOpti
 
 export interface VisualsDeleteOptions {
   json?: boolean;
+  hard?: boolean;
 }
 
 /**
- * Wraps DELETE /api/agent/v1/brands/{brandId}/assets/{assetId} (soft-delete)
+ * Wraps DELETE /api/agent/v1/brands/{brandId}/assets/{assetId}
+ * Soft-delete by default; --hard adds ?hard=true, which removes the file from storage for good.
  */
 export async function visualsDeleteCommand(assetId: string, options: VisualsDeleteOptions): Promise<void> {
   const client = createClient();
   const brandId = requireBrand();
 
   try {
-    const res = await client.delete(`/api/agent/v1/brands/${brandId}/assets/${assetId}`);
+    const res = await client.delete(`/api/agent/v1/brands/${brandId}/assets/${assetId}${options.hard ? '?hard=true' : ''}`);
     if (options.json) { emitJson(res.data); return; }
 
-    console.log(`SUCCESS: Asset ${assetId} removed from library (soft-deleted).`);
+    console.log(options.hard
+      ? `SUCCESS: Asset ${assetId} deleted, file removed from storage.`
+      : `SUCCESS: Asset ${assetId} removed from library (soft-deleted; file kept). Use --hard to remove the file too.`);
   } catch (err) {
     printError(err);
     process.exit(1);

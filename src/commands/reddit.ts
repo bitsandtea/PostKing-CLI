@@ -30,6 +30,7 @@ interface RedditRewriteOptions {
   voice?: string;
   variations?: string;
   repeat?: string;
+  founderContext?: string;
   json?: boolean;
   brand?: string;
 }
@@ -43,6 +44,35 @@ interface RedditPostOutputData {
   length?: string;
   subreddit?: string;
   variationIndex?: number;
+  check?: RedditDraftCheck;
+}
+
+interface RedditDraftCheck {
+  status?: "passed" | "needs_review" | "blocked";
+  ruleBreaks?: Array<{ rule?: string; quote?: string; reason?: string }>;
+  issues?: string[];
+  overriddenAt?: string;
+}
+
+/** Prints the draft's check: passed, or why it is not approved (rule + quoted words, or the issue list). */
+function printCheck(check: RedditDraftCheck | undefined): void {
+  if (!check?.status) {
+    console.log(color(33, "Check:      none on file (older draft) — review before posting."));
+    return;
+  }
+  if (check.status === "passed") {
+    console.log(color(32, "Check:      passed — approved, ready to post."));
+    return;
+  }
+  const label = check.status === "blocked" ? "BLOCKED" : "NEEDS REVIEW";
+  const overridden = check.overriddenAt ? " (approved by you despite the check)" : "";
+  console.log(color(31, `Check:      ${label} — not approved; do not post it as it is.${overridden}`));
+  for (const b of check.ruleBreaks ?? []) {
+    console.log(color(31, `  - ${b.rule ?? "rule"}${b.quote ? `: "${b.quote}"` : ""}${b.reason ? ` — ${b.reason}` : ""}`));
+  }
+  for (const issue of check.issues ?? []) {
+    console.log(color(33, `  - ${issue}`));
+  }
 }
 
 function extractComplianceLine(notes?: string): string | undefined {
@@ -63,6 +93,7 @@ function printPost(post: { id: string }, outputData: RedditPostOutputData, json?
   console.log(`Subreddit:  r/${outputData.subreddit ?? "?"}`);
   console.log(`Title:      ${outputData.redditTitle ?? "(none)"}`);
   console.log(`Word count: ${outputData.wordCount ?? "?"}`);
+  printCheck(outputData.check);
   if (complianceLine) {
     const isClean = /^Compliance:\s*passed\.?$/i.test(complianceLine);
     console.log(color(isClean ? 32 : 33, complianceLine));
@@ -109,7 +140,12 @@ async function runRewriteOnce(
     const operationStatus: string = data.operationStatus ?? "PENDING";
 
     if (operationStatus === "COMPLETED") {
-      let outputData: { saved?: { postIds: string[] }; variationCount?: number; subredditNotice?: string } = {};
+      let outputData: {
+        saved?: { postIds: string[] };
+        variationCount?: number;
+        subredditNotice?: string;
+        counts?: { passed: number; needsReview: number; blocked: number };
+      } = {};
       try {
         outputData = data.outputData ? JSON.parse(data.outputData) : {};
       } catch {
@@ -127,6 +163,10 @@ async function runRewriteOnce(
       }
 
       console.log(`\n✅ COMPLETE — ${postIds.length} variation(s) saved.`);
+      if (outputData.counts) {
+        const { passed, needsReview, blocked } = outputData.counts;
+        console.log(`Checks: ${passed} passed, ${needsReview} need review, ${blocked} blocked. Only passed drafts are approved.`);
+      }
 
       let allOk = true;
       for (const postId of postIds) {
@@ -207,6 +247,7 @@ export async function redditRewriteCommand(options: RedditRewriteOptions): Promi
   if (options.title) body.sourceTitle = options.title;
   if (options.voice) body.voiceId = options.voice;
   if (options.length) body.length = options.length;
+  if (options.founderContext) body.founderContext = options.founderContext;
 
   let anyFailure = false;
   for (let i = 1; i <= repeat; i++) {
@@ -237,7 +278,7 @@ export async function redditPoolCommand(options: RedditPoolOptions): Promise<voi
     }
 
     const data = res.data;
-    const subreddits: any[] = data.subreddits ?? data.pool ?? data.items ?? [];
+    const subreddits: any[] = data.pool?.subreddits ?? data.subreddits ?? [];
 
     if (subreddits.length === 0) {
       console.log("No pooled subreddits found for this brand. Run 'reddit_generate_pool' first.");
@@ -250,13 +291,36 @@ export async function redditPoolCommand(options: RedditPoolOptions): Promise<voi
       const postingStyle = s.posting_style ?? s.postingStyle ?? "—";
       const rules = s.rules ?? s.subreddit_rules ?? s.subredditRules;
       const ruleCount = Array.isArray(rules) ? rules.length : (s.rule_count ?? s.ruleCount ?? "?");
-      console.log(`  r/${displayName}`);
+      const members = typeof s.subscribers === "number" ? `${s.subscribers.toLocaleString("en-US")} members` : "members unknown";
+      const fit = typeof s.brand_fit === "number" ? `brand fit ${s.brand_fit}/10` : "brand fit —";
+      console.log(`  r/${displayName}  (${fit}, ${members})`);
       console.log(`    style: ${postingStyle}`);
       console.log(`    rules: ${ruleCount}`);
+      const promo = promoText(s.promo_policy);
+      if (promo) console.log(`    promotion: ${promo}`);
+      const act = activityText(s.activity);
+      if (act) console.log(`    activity: ${act}`);
+      if (s.tiny === true) console.log(color(33, "    under 500 members — too small to be worth a post"));
+      if (s.activity?.status === "inactive") console.log(color(33, "    inactive — no post in the last 30 days"));
     });
   } catch (err) {
     console.error(`ERROR: Failed to fetch reddit pool.`);
     console.error(`Reason: ${extractApiError(err)}`);
     process.exit(1);
   }
+}
+
+function promoText(policy: unknown): string | null {
+  if (policy === "megathread_only") return "megathread only";
+  if (policy === "no_promotion") return "none (value posts only)";
+  if (policy === "unknown") return "rules unclear";
+  return null;
+}
+
+function activityText(a: { status?: string; last_post_at?: string | null } | undefined): string | null {
+  if (!a?.status || a.status === "unknown") return null;
+  const t = a.last_post_at ? Date.parse(a.last_post_at) : NaN;
+  if (!Number.isFinite(t)) return a.status;
+  const d = Math.max(0, Math.floor((Date.now() - t) / 86_400_000));
+  return `${a.status}, last post ${d === 0 ? "today" : `${d} day${d === 1 ? "" : "s"} ago`}`;
 }
