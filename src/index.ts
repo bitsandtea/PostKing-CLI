@@ -382,8 +382,8 @@ brand
     "language. A brand can enable more than one language, each with its own\n" +
     "keyword research, blog, and landing pages — the default sits at the domain\n" +
     "root, every other enabled language sits under /{languageCode}. With no\n" +
-    "flags, prints the enabled set. Gated by the brand's plan (Trial/Growth 1,\n" +
-    "Pro 2, Enterprise 5)."
+    "flags, prints the enabled set. Gated by the brand's plan (Trial/Legacy\n" +
+    "Growth 1, Starter (PRO) 2, Growth (ENTERPRISE) 5)."
   )
   .option("--json", "Print the fetched languages as JSON and exit")
   .option("--add <code>", "Enable a language, e.g. --add cs")
@@ -704,14 +704,14 @@ billing
 
 billing
   .command("tiers")
-  .description("List subscription tiers with pricing and monthly credit allowances.")
+  .description("List the subscription tiers this account can buy, with pricing and monthly credit allowances.")
   .option("--json", "Output raw JSON")
   .action((opts) => billingTiersCommand(opts));
 
 billing
   .command("subscribe")
   .description("Start a subscription checkout and poll for activation confirmation.")
-  .requiredOption("--tier <GROWTH|PRO|ENTERPRISE>", "Subscription tier to activate")
+  .requiredOption("--tier <GROWTH|PRO|ENTERPRISE>", "Subscription tier id to activate (PRO is sold as Starter, ENTERPRISE as Growth, GROWTH is legacy; run `pking billing tiers` for what this account can buy)")
   .option("--interval <month|year>", "Billing interval: month or year (default: month)")
   .option("--json", "Output raw JSON")
   .action((opts) => billingSubscribeCommand(opts));
